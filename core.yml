@@ -1,0 +1,122 @@
+services:
+  api-gateway-container:
+    image: selimhorri/api-gateway-ecommerce-boot:0.1.0
+    ports:
+      - 8080:8080
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      SPRING_CONFIG_IMPORT: ""
+      EUREKA_CLIENT_ENABLED: "false"
+      SPRING_CLOUD_DISCOVERY_ENABLED: "false"
+      SPRING_CLOUD_CONFIG_ENABLED: "false"
+      # Override routes to target services directly (no Eureka) and support /app/** -> product-service
+      SPRING_APPLICATION_JSON: |-
+        {"spring":{"cloud":{"gateway":{"routes":[
+          {"id":"PAYMENT-SERVICE","uri":"http://payment-service-container:8400","predicates":["Path=/payment-service/**"]},
+          {"id":"PRODUCT-SERVICE","uri":"http://product-service-container:8500","predicates":["Path=/product-service/**"]},
+          {"id":"SHIPPING-SERVICE","uri":"http://shipping-service-container:8600","predicates":["Path=/shipping-service/**"]},
+          {"id":"USER-SERVICE","uri":"http://user-service-container:8700","predicates":["Path=/user-service/**"]},
+          {"id":"FAVOURITE-SERVICE","uri":"http://favourite-service-container:8800","predicates":["Path=/favourite-service/**"]},
+          {"id":"PROXY-CLIENT","uri":"http://product-service-container:8500","predicates":["Path=/app/**"],"filters":["RewritePath=/app/(?<segment>.*), /product-service/$${segment}"]}
+        ]}}}}
+    networks:
+      default:
+        aliases:
+          - API-GATEWAY
+
+  product-service-container:
+    image: selimhorri/product-service-ecommerce-boot:0.1.0
+    ports:
+      - 8500:8500
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - "SPRING_CONFIG_IMPORT="
+      - EUREKA_CLIENT_ENABLED=false
+      - SPRING_CLOUD_DISCOVERY_ENABLED=false
+      - SPRING_CLOUD_CONFIG_ENABLED=false
+    networks:
+      default:
+        aliases:
+          - PRODUCT-SERVICE
+
+  shipping-service-container:
+    image: selimhorri/shipping-service-ecommerce-boot:0.1.0
+    ports:
+      - 8600:8600
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - "SPRING_CONFIG_IMPORT="
+      - EUREKA_CLIENT_ENABLED=false
+      - SPRING_CLOUD_DISCOVERY_ENABLED=true
+      - SPRING_CLOUD_CONFIG_ENABLED=false
+      - SPRING_APPLICATION_JSON={"spring":{"cloud":{"discovery":{"client":{"simple":{"instances":{"PRODUCT-SERVICE":[{"uri":"http://product-service-container:8500"}],"ORDER-SERVICE":[{"uri":"http://order-service-container:8300"}]}}}}}}}
+    networks:
+      default:
+        aliases:
+          - SHIPPING-SERVICE
+
+  user-service-container:
+    # Build locally to pick up code fixes (e.g., null-safe mapping)
+    build:
+      context: .
+      dockerfile: user-service/Dockerfile
+    ports:
+      - 8700:8700
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - "SPRING_CONFIG_IMPORT="
+      - EUREKA_CLIENT_ENABLED=false
+      - SPRING_CLOUD_DISCOVERY_ENABLED=false
+      - SPRING_CLOUD_CONFIG_ENABLED=false
+    networks:
+      default:
+        aliases:
+          - USER-SERVICE
+
+  favourite-service-container:
+    image: selimhorri/favourite-service-ecommerce-boot:0.1.0
+    ports:
+      - 8800:8800
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - "SPRING_CONFIG_IMPORT="
+      - EUREKA_CLIENT_ENABLED=false
+      - SPRING_CLOUD_DISCOVERY_ENABLED=true
+      - SPRING_CLOUD_CONFIG_ENABLED=false
+      - SPRING_APPLICATION_JSON={"spring":{"cloud":{"discovery":{"client":{"simple":{"instances":{"USER-SERVICE":[{"uri":"http://user-service-container:8700"}],"PRODUCT-SERVICE":[{"uri":"http://product-service-container:8500"}]}}}}}}}
+    networks:
+      default:
+        aliases:
+          - FAVOURITE-SERVICE
+
+  payment-service-container:
+    image: selimhorri/payment-service-ecommerce-boot:0.1.0
+    ports:
+      - 8400:8400
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - "SPRING_CONFIG_IMPORT="
+      - EUREKA_CLIENT_ENABLED=false
+      - SPRING_CLOUD_DISCOVERY_ENABLED=true
+      - SPRING_CLOUD_CONFIG_ENABLED=false
+      - SPRING_APPLICATION_JSON={"spring":{"cloud":{"discovery":{"client":{"simple":{"instances":{"ORDER-SERVICE":[{"uri":"http://order-service-container:8300"}]}}}}}}}
+    networks:
+      default:
+        aliases:
+          - PAYMENT-SERVICE
+
+  # Added to the core stack so SHIPPING/PAYMENT can reach it on the same Docker network
+  order-service-container:
+    image: selimhorri/order-service-ecommerce-boot:0.1.0
+    ports:
+      - 8300:8300
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - "SPRING_CONFIG_IMPORT="
+      - EUREKA_CLIENT_ENABLED=false
+      - SPRING_CLOUD_DISCOVERY_ENABLED=false
+      - SPRING_CLOUD_CONFIG_ENABLED=false
+    networks:
+      default:
+        aliases:
+          - ORDER-SERVICE

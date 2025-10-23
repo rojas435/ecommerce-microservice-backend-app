@@ -38,6 +38,47 @@ ecommerce-microservice-backend-app [μService] --> Parent folder.
 ```
 Now, as we have learned about different system components, then let's start.
 
+### Windows Quickstart (PowerShell)
+
+If you are on Windows and using PowerShell, follow these steps to run the project locally:
+
+1) Ensure Java 11 is active in your shell
+
+```powershell
+# Update the path below to your installed JDK 11 directory
+$env:JAVA_HOME = "C:\\Program Files\\Eclipse Adoptium\\jdk-11.0.24+8"
+$env:Path = "$env:JAVA_HOME\\bin;$env:Path"
+
+# Verify Maven wrapper now uses Java 11
+cd "C:\\Icesi\\Semestre8\\IngesoftV\\Taller 2\\ecommerce-microservice-backend-app"
+.\\mvnw.cmd -v
+```
+
+2) Build all microservices
+
+```powershell
+.\\mvnw.cmd clean package
+```
+
+3) Start the full landscape with Docker
+
+```powershell
+# Make sure Docker Desktop is running
+docker compose -f compose.yml up -d
+```
+
+4) Smoke test endpoints (use 127.0.0.1 on Windows to avoid proxy issues)
+
+- Eureka UI: http://127.0.0.1:8761/
+- API Gateway actuator: http://127.0.0.1:8080/app/actuator/health
+- Proxy Client Swagger: http://127.0.0.1:8900/swagger-ui.html
+- Zipkin UI: http://127.0.0.1:9411/zipkin/
+
+Notes:
+- The Docker Compose file is configured with the `docker` Spring profile so services discover each other via the internal Docker network.
+- If ports are busy on your machine, adjust the port mappings in `compose.yml` accordingly.
+
+
 ### System Boundary *Architecture* - μServices Landscape
 
 ![System Boundary](app-architecture.drawio.png)
