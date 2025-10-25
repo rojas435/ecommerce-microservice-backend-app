@@ -1,0 +1,88 @@
+---
+# Shipping Service Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shipping-service
+  namespace: ecommerce
+  labels:
+    app: shipping-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: shipping-service
+  template:
+    metadata:
+      labels:
+        app: shipping-service
+    spec:
+      containers:
+      - name: shipping-service
+        image: selimhorri/shipping-service-ecommerce-boot:0.1.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8600
+          name: http
+        env:
+        - name: SPRING_CLOUD_DISCOVERY_ENABLED
+          value: "true"
+        - name: SPRING_APPLICATION_JSON
+          value: |
+            {
+              "spring": {
+                "cloud": {
+                  "discovery": {
+                    "client": {
+                      "simple": {
+                        "instances": {
+                          "PRODUCT-SERVICE": [{"uri": "http://product-service:8500"}],
+                          "ORDER-SERVICE": [{"uri": "http://order-service:8300"}]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+        envFrom:
+        - configMapRef:
+            name: microservices-config
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /shipping-service/actuator/health
+            port: 8600
+          initialDelaySeconds: 60
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /shipping-service/actuator/health
+            port: 8600
+          initialDelaySeconds: 45
+          periodSeconds: 5
+---
+# Shipping Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: shipping-service
+  namespace: ecommerce
+  labels:
+    app: shipping-service
+spec:
+  type: NodePort
+  ports:
+  - port: 8600
+    targetPort: 8600
+    nodePort: 30600
+    protocol: TCP
+    name: http
+  selector:
+    app: shipping-service

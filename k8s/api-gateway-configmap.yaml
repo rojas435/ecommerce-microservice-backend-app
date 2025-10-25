@@ -1,0 +1,54 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: api-gateway-routes
+  namespace: ecommerce
+data:
+  SPRING_APPLICATION_JSON: |
+    {
+      "spring": {
+        "cloud": {
+          "gateway": {
+            "routes": [
+              {
+                "id": "PAYMENT-SERVICE",
+                "uri": "http://payment-service:8400",
+                "predicates": ["Path=/payment-service/**"]
+              },
+              {
+                "id": "PRODUCT-SERVICE",
+                "uri": "http://product-service:8500",
+                "predicates": ["Path=/product-service/**"]
+              },
+              {
+                "id": "SHIPPING-SERVICE",
+                "uri": "http://shipping-service:8600",
+                "predicates": ["Path=/shipping-service/**"]
+              },
+              {
+                "id": "USER-SERVICE",
+                "uri": "http://user-service:8700",
+                "predicates": ["Path=/user-service/**"]
+              },
+              {
+                "id": "FAVOURITE-SERVICE",
+                "uri": "http://favourite-service:8800",
+                "predicates": ["Path=/favourite-service/**"]
+              },
+              {
+                "id": "ORDER-SERVICE",
+                "uri": "http://order-service:8300",
+                "predicates": ["Path=/order-service/**"]
+              },
+              {
+                "id": "PROXY-CLIENT",
+                "uri": "http://product-service:8500",
+                "predicates": ["Path=/app/**"],
+                "filters": ["RewritePath=/app/(?<segment>.*), /product-service/$${segment}"]
+              }
+            ]
+          }
+        }
+      }
+    }

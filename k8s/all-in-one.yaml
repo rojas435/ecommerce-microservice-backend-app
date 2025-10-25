@@ -1,0 +1,348 @@
+---
+# All-in-One Kubernetes Manifest para Ecommerce Microservices
+# Version simplificada sin health checks para Minikube
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ecommerce
+  labels:
+    name: ecommerce
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: microservices-config
+  namespace: ecommerce
+data:
+  SPRING_PROFILES_ACTIVE: "dev"
+  SPRING_CONFIG_IMPORT: ""
+  EUREKA_CLIENT_ENABLED: "false"
+  SPRING_CLOUD_CONFIG_ENABLED: "false"
+  SPRING_ZIPKIN_ENABLED: "false"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: api-gateway-routes
+  namespace: ecommerce
+data:
+  SPRING_APPLICATION_JSON: |
+    {
+      "spring": {
+        "cloud": {
+          "gateway": {
+            "routes": [
+              {"id": "PAYMENT-SERVICE", "uri": "http://payment-service:8400", "predicates": ["Path=/payment-service/**"]},
+              {"id": "PRODUCT-SERVICE", "uri": "http://product-service:8500", "predicates": ["Path=/product-service/**"]},
+              {"id": "SHIPPING-SERVICE", "uri": "http://shipping-service:8600", "predicates": ["Path=/shipping-service/**"]},
+              {"id": "USER-SERVICE", "uri": "http://user-service:8700", "predicates": ["Path=/user-service/**"]},
+              {"id": "FAVOURITE-SERVICE", "uri": "http://favourite-service:8800", "predicates": ["Path=/favourite-service/**"]},
+              {"id": "ORDER-SERVICE", "uri": "http://order-service:8300", "predicates": ["Path=/order-service/**"]},
+              {"id": "PROXY-CLIENT", "uri": "http://product-service:8500", "predicates": ["Path=/app/**"], "filters": ["RewritePath=/app/(?<segment>.*), /product-service/$${segment}"]}
+            ]
+          }
+        }
+      }
+    }
+---
+# Order Service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-service
+  namespace: ecommerce
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: order-service
+  template:
+    metadata:
+      labels:
+        app: order-service
+    spec:
+      containers:
+      - name: order-service
+        image: selimhorri/order-service-ecommerce-boot:0.1.0
+        ports:
+        - containerPort: 8300
+        env:
+        - name: SPRING_CLOUD_DISCOVERY_ENABLED
+          value: "false"
+        envFrom:
+        - configMapRef:
+            name: microservices-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: order-service
+  namespace: ecommerce
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8300
+    targetPort: 8300
+  selector:
+    app: order-service
+---
+# Product Service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: product-service
+  namespace: ecommerce
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: product-service
+  template:
+    metadata:
+      labels:
+        app: product-service
+    spec:
+      containers:
+      - name: product-service
+        image: selimhorri/product-service-ecommerce-boot:0.1.0
+        ports:
+        - containerPort: 8500
+        env:
+        - name: SPRING_CLOUD_DISCOVERY_ENABLED
+          value: "false"
+        envFrom:
+        - configMapRef:
+            name: microservices-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: product-service
+  namespace: ecommerce
+spec:
+  type: NodePort
+  ports:
+  - port: 8500
+    targetPort: 8500
+    nodePort: 30500
+  selector:
+    app: product-service
+---
+# User Service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-service
+  namespace: ecommerce
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: user-service
+  template:
+    metadata:
+      labels:
+        app: user-service
+    spec:
+      containers:
+      - name: user-service
+        image: selimhorri/user-service-ecommerce-boot:0.1.0
+        ports:
+        - containerPort: 8700
+        env:
+        - name: SPRING_CLOUD_DISCOVERY_ENABLED
+          value: "false"
+        envFrom:
+        - configMapRef:
+            name: microservices-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-service
+  namespace: ecommerce
+spec:
+  type: NodePort
+  ports:
+  - port: 8700
+    targetPort: 8700
+    nodePort: 30700
+  selector:
+    app: user-service
+---
+# Favourite Service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: favourite-service
+  namespace: ecommerce
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: favourite-service
+  template:
+    metadata:
+      labels:
+        app: favourite-service
+    spec:
+      containers:
+      - name: favourite-service
+        image: selimhorri/favourite-service-ecommerce-boot:0.1.0
+        ports:
+        - containerPort: 8800
+        env:
+        - name: SPRING_CLOUD_DISCOVERY_ENABLED
+          value: "true"
+        - name: SPRING_APPLICATION_JSON
+          value: '{"spring":{"cloud":{"discovery":{"client":{"simple":{"instances":{"USER-SERVICE":[{"uri":"http://user-service:8700"}],"PRODUCT-SERVICE":[{"uri":"http://product-service:8500"}]}}}}}}}'
+        envFrom:
+        - configMapRef:
+            name: microservices-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: favourite-service
+  namespace: ecommerce
+spec:
+  type: NodePort
+  ports:
+  - port: 8800
+    targetPort: 8800
+    nodePort: 30800
+  selector:
+    app: favourite-service
+---
+# Shipping Service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shipping-service
+  namespace: ecommerce
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: shipping-service
+  template:
+    metadata:
+      labels:
+        app: shipping-service
+    spec:
+      containers:
+      - name: shipping-service
+        image: selimhorri/shipping-service-ecommerce-boot:0.1.0
+        ports:
+        - containerPort: 8600
+        env:
+        - name: SPRING_CLOUD_DISCOVERY_ENABLED
+          value: "true"
+        - name: SPRING_APPLICATION_JSON
+          value: '{"spring":{"cloud":{"discovery":{"client":{"simple":{"instances":{"PRODUCT-SERVICE":[{"uri":"http://product-service:8500"}],"ORDER-SERVICE":[{"uri":"http://order-service:8300"}]}}}}}}}'
+        envFrom:
+        - configMapRef:
+            name: microservices-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: shipping-service
+  namespace: ecommerce
+spec:
+  type: NodePort
+  ports:
+  - port: 8600
+    targetPort: 8600
+    nodePort: 30600
+  selector:
+    app: shipping-service
+---
+# Payment Service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-service
+  namespace: ecommerce
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: payment-service
+  template:
+    metadata:
+      labels:
+        app: payment-service
+    spec:
+      containers:
+      - name: payment-service
+        image: selimhorri/payment-service-ecommerce-boot:0.1.0
+        ports:
+        - containerPort: 8400
+        env:
+        - name: SPRING_CLOUD_DISCOVERY_ENABLED
+          value: "true"
+        - name: SPRING_APPLICATION_JSON
+          value: '{"spring":{"cloud":{"discovery":{"client":{"simple":{"instances":{"ORDER-SERVICE":[{"uri":"http://order-service:8300"}]}}}}}}}'
+        envFrom:
+        - configMapRef:
+            name: microservices-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: payment-service
+  namespace: ecommerce
+spec:
+  type: NodePort
+  ports:
+  - port: 8400
+    targetPort: 8400
+    nodePort: 30400
+  selector:
+    app: payment-service
+---
+# API Gateway
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+  namespace: ecommerce
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api-gateway
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+    spec:
+      containers:
+      - name: api-gateway
+        image: selimhorri/api-gateway-ecommerce-boot:0.1.0
+        ports:
+        - containerPort: 8080
+        env:
+        - name: SPRING_CLOUD_DISCOVERY_ENABLED
+          value: "false"
+        envFrom:
+        - configMapRef:
+            name: microservices-config
+        - configMapRef:
+            name: api-gateway-routes
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway
+  namespace: ecommerce
+spec:
+  type: NodePort
+  ports:
+  - port: 8080
+    targetPort: 8080
+    nodePort: 30080
+  selector:
+    app: api-gateway

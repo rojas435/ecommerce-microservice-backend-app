@@ -1,0 +1,58 @@
+---
+# Product Service Deployment (Simplified - No Health Checks)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: product-service
+  namespace: ecommerce
+  labels:
+    app: product-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: product-service
+  template:
+    metadata:
+      labels:
+        app: product-service
+    spec:
+      containers:
+      - name: product-service
+        image: selimhorri/product-service-ecommerce-boot:0.1.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8500
+          name: http
+        env:
+        - name: SPRING_CLOUD_DISCOVERY_ENABLED
+          value: "false"
+        envFrom:
+        - configMapRef:
+            name: microservices-config
+        resources:
+          requests:
+            memory: "384Mi"
+            cpu: "200m"
+          limits:
+            memory: "768Mi"
+            cpu: "400m"
+---
+# Product Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: product-service
+  namespace: ecommerce
+  labels:
+    app: product-service
+spec:
+  type: NodePort
+  ports:
+  - port: 8500
+    targetPort: 8500
+    nodePort: 30500
+    protocol: TCP
+    name: http
+  selector:
+    app: product-service

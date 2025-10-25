@@ -1,0 +1,13 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: microservices-config
+  namespace: ecommerce
+data:
+  SPRING_PROFILES_ACTIVE: "dev"
+  SPRING_CONFIG_IMPORT: ""
+  EUREKA_CLIENT_ENABLED: "false"
+  SPRING_CLOUD_CONFIG_ENABLED: "false"
+  # Disable Zipkin to avoid connection warnings
+  SPRING_ZIPKIN_ENABLED: "false"

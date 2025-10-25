@@ -1,0 +1,87 @@
+---
+# Payment Service Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-service
+  namespace: ecommerce
+  labels:
+    app: payment-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: payment-service
+  template:
+    metadata:
+      labels:
+        app: payment-service
+    spec:
+      containers:
+      - name: payment-service
+        image: selimhorri/payment-service-ecommerce-boot:0.1.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8400
+          name: http
+        env:
+        - name: SPRING_CLOUD_DISCOVERY_ENABLED
+          value: "true"
+        - name: SPRING_APPLICATION_JSON
+          value: |
+            {
+              "spring": {
+                "cloud": {
+                  "discovery": {
+                    "client": {
+                      "simple": {
+                        "instances": {
+                          "ORDER-SERVICE": [{"uri": "http://order-service:8300"}]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+        envFrom:
+        - configMapRef:
+            name: microservices-config
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /payment-service/actuator/health
+            port: 8400
+          initialDelaySeconds: 60
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /payment-service/actuator/health
+            port: 8400
+          initialDelaySeconds: 45
+          periodSeconds: 5
+---
+# Payment Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: payment-service
+  namespace: ecommerce
+  labels:
+    app: payment-service
+spec:
+  type: NodePort
+  ports:
+  - port: 8400
+    targetPort: 8400
+    nodePort: 30400
+    protocol: TCP
+    name: http
+  selector:
+    app: payment-service

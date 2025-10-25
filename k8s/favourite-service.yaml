@@ -1,0 +1,88 @@
+---
+# Favourite Service Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: favourite-service
+  namespace: ecommerce
+  labels:
+    app: favourite-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: favourite-service
+  template:
+    metadata:
+      labels:
+        app: favourite-service
+    spec:
+      containers:
+      - name: favourite-service
+        image: selimhorri/favourite-service-ecommerce-boot:0.1.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8800
+          name: http
+        env:
+        - name: SPRING_CLOUD_DISCOVERY_ENABLED
+          value: "true"
+        - name: SPRING_APPLICATION_JSON
+          value: |
+            {
+              "spring": {
+                "cloud": {
+                  "discovery": {
+                    "client": {
+                      "simple": {
+                        "instances": {
+                          "USER-SERVICE": [{"uri": "http://user-service:8700"}],
+                          "PRODUCT-SERVICE": [{"uri": "http://product-service:8500"}]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+        envFrom:
+        - configMapRef:
+            name: microservices-config
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /favourite-service/actuator/health
+            port: 8800
+          initialDelaySeconds: 60
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /favourite-service/actuator/health
+            port: 8800
+          initialDelaySeconds: 45
+          periodSeconds: 5
+---
+# Favourite Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: favourite-service
+  namespace: ecommerce
+  labels:
+    app: favourite-service
+spec:
+  type: NodePort
+  ports:
+  - port: 8800
+    targetPort: 8800
+    nodePort: 30800
+    protocol: TCP
+    name: http
+  selector:
+    app: favourite-service

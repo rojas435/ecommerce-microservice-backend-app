@@ -1,0 +1,205 @@
+{
+	"info": {
+		"_postman_id": "k8s-ecommerce-2024",
+		"name": "Ecommerce Microservices - Kubernetes",
+		"description": "Colección para probar microservicios desplegados en Kubernetes con Port-Forward.\n\n**IMPORTANTE:** Antes de usar esta colección, ejecuta:\n```powershell\ncd k8s\n.\\start-port-forwards.ps1\n```\n\nEsto abrirá port-forwards para todos los servicios.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "API Gateway",
+			"item": [
+				{
+					"name": "Products via Gateway",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/product-service/api/products",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["product-service", "api", "products"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Users via Gateway",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/user-service/api/users",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["user-service", "api", "users"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Favourites via Gateway",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/favourite-service/api/favourites",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["favourite-service", "api", "favourites"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Proxy Client (/app/*)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/app/api/products",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["app", "api", "products"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Product Service",
+			"item": [
+				{
+					"name": "Get All Products",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8500/product-service/api/products",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8500",
+							"path": ["product-service", "api", "products"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Product by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8500/product-service/api/products/1",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8500",
+							"path": ["product-service", "api", "products", "1"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "User Service",
+			"item": [
+				{
+					"name": "Get All Users",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8700/user-service/api/users",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8700",
+							"path": ["user-service", "api", "users"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get User by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8700/user-service/api/users/1",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8700",
+							"path": ["user-service", "api", "users", "1"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Favourite Service",
+			"item": [
+				{
+					"name": "Get All Favourites",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8800/favourite-service/api/favourites",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8800",
+							"path": ["favourite-service", "api", "favourites"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Shipping Service",
+			"item": [
+				{
+					"name": "Get All Shippings",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8600/shipping-service/api/shippings",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8600",
+							"path": ["shipping-service", "api", "shippings"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Payment Service",
+			"item": [
+				{
+					"name": "Get All Payments",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8400/payment-service/api/payments",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8400",
+							"path": ["payment-service", "api", "payments"]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	]
+}
