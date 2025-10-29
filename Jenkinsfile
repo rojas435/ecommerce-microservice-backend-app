@@ -60,7 +60,13 @@ pipeline {
     stage('SonarQube Analysis') {
       steps {
         withSonarQubeEnv('SonarQube') {
-          sh 'mvn -B -U -DskipTests sonar:sonar'
+          sh '''
+            mvn -B -U -DskipTests=true \
+              -pl order-service,payment-service,shipping-service -am \
+              -Dsonar.java.binaries=order-service/target/classes,payment-service/target/classes,shipping-service/target/classes \
+              -Dsonar.coverage.jacoco.xmlReportPaths=order-service/target/site/jacoco/jacoco.xml,payment-service/target/site/jacoco/jacoco.xml,shipping-service/target/site/jacoco/jacoco.xml \
+              verify sonar:sonar
+          '''
         }
       }
     }
