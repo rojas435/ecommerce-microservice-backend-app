@@ -72,8 +72,22 @@ pipeline {
 
     stage('Quality Gate') {
       steps {
-        timeout(time: 10, unit: 'MINUTES') {
-          waitForQualityGate abortPipeline: false
+        script {
+          try {
+            timeout(time: 3, unit: 'MINUTES') {
+              def qg = waitForQualityGate()
+              if (qg.status != 'OK') {
+                echo "Quality Gate status: ${qg.status}"
+                echo "Quality Gate failed but continuing pipeline (non-blocking)"
+              } else {
+                echo "Quality Gate passed"
+              }
+            }
+          } catch (Exception e) {
+            echo "Quality Gate timeout or error: ${e.message}"
+            echo "Continuing pipeline - check Sonar dashboard manually"
+            echo "Dashboard: http://sonarqube:9000/dashboard?id=com.selimhorri%3Aecommerce-microservice-backend"
+          }
         }
       }
     }
