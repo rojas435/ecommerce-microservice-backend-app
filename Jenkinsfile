@@ -57,6 +57,22 @@ pipeline {
       }
     }
 
+    stage('SonarQube Analysis') {
+      steps {
+        withSonarQubeEnv('SonarQube') {
+          sh 'mvn -B -U -DskipTests sonar:sonar'
+        }
+      }
+    }
+
+    stage('Quality Gate') {
+      steps {
+        timeout(time: 5, unit: 'MINUTES') {
+          waitForQualityGate abortPipeline: false
+        }
+      }
+    }
+
     stage('E2E (optional)') {
       when { expression { return params.RUN_E2E } }
       steps {
