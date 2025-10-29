@@ -66,7 +66,7 @@ pipeline {
               -DskipTests=false \
               -Dsonar.java.binaries=order-service/target/classes,payment-service/target/classes,shipping-service/target/classes \
               -Dsonar.coverage.jacoco.xmlReportPaths=order-service/target/site/jacoco/jacoco.xml,payment-service/target/site/jacoco/jacoco.xml,shipping-service/target/site/jacoco/jacoco.xml \
-              test jacoco:report sonar:sonar
+              test org.jacoco:jacoco-maven-plugin:0.8.8:report sonar:sonar
           '''
         }
       }
