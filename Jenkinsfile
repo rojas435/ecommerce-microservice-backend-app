@@ -61,11 +61,12 @@ pipeline {
       steps {
         withSonarQubeEnv('SonarQube') {
           sh '''
-            mvn -B -U -DskipTests=true \
+            mvn -B -U \
               -pl order-service,payment-service,shipping-service -am \
+              -DskipTests=false \
               -Dsonar.java.binaries=order-service/target/classes,payment-service/target/classes,shipping-service/target/classes \
               -Dsonar.coverage.jacoco.xmlReportPaths=order-service/target/site/jacoco/jacoco.xml,payment-service/target/site/jacoco/jacoco.xml,shipping-service/target/site/jacoco/jacoco.xml \
-              verify sonar:sonar
+              test jacoco:report sonar:sonar
           '''
         }
       }
