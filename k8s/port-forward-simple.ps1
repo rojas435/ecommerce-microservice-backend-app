@@ -33,8 +33,8 @@ Start-Job -ScriptBlock { kubectl port-forward -n ecommerce service/product-servi
 Start-Sleep -Milliseconds 300
 
 # User Service
-Write-Host "[OK] User Service      -> http://localhost:8700" -ForegroundColor Green
-Start-Job -ScriptBlock { kubectl port-forward -n ecommerce service/user-service 8700:8700 } | Out-Null
+Write-Host "[OK] User Service      -> http://localhost:8400" -ForegroundColor Green
+Start-Job -ScriptBlock { kubectl port-forward -n ecommerce service/user-service 8400:8400 } | Out-Null
 Start-Sleep -Milliseconds 300
 
 # Favourite Service
@@ -43,13 +43,17 @@ Start-Job -ScriptBlock { kubectl port-forward -n ecommerce service/favourite-ser
 Start-Sleep -Milliseconds 300
 
 # Shipping Service
-Write-Host "[OK] Shipping Service  -> http://localhost:8600" -ForegroundColor Green
-Start-Job -ScriptBlock { kubectl port-forward -n ecommerce service/shipping-service 8600:8600 } | Out-Null
+Write-Host "[OK] Shipping Service  -> http://localhost:8700" -ForegroundColor Green
+Start-Job -ScriptBlock { kubectl port-forward -n ecommerce service/shipping-service 8700:8700 } | Out-Null
 Start-Sleep -Milliseconds 300
 
 # Payment Service
-Write-Host "[OK] Payment Service   -> http://localhost:8400" -ForegroundColor Green
-Start-Job -ScriptBlock { kubectl port-forward -n ecommerce service/payment-service 8400:8400 } | Out-Null
+Write-Host "[OK] Payment Service   -> http://localhost:8600" -ForegroundColor Green
+Start-Job -ScriptBlock { kubectl port-forward -n ecommerce service/payment-service 8600:8600 } | Out-Null
+
+# Order Service
+Write-Host "[OK] Order Service     -> http://localhost:8300" -ForegroundColor Green
+Start-Job -ScriptBlock { kubectl port-forward -n ecommerce service/order-service 8300:8300 } | Out-Null
 
 Start-Sleep -Seconds 2
 
@@ -61,8 +65,9 @@ Write-Host ""
 Write-Host "URLs para Postman:" -ForegroundColor Cyan
 Write-Host "  http://localhost:8080/product-service/api/products" -ForegroundColor White
 Write-Host "  http://localhost:8500/product-service/api/products" -ForegroundColor White
-Write-Host "  http://localhost:8700/user-service/api/users" -ForegroundColor White
+Write-Host "  http://localhost:8400/user-service/api/users" -ForegroundColor White
 Write-Host "  http://localhost:8800/favourite-service/api/favourites" -ForegroundColor White
+Write-Host "  http://localhost:8300/order-service/api/orders" -ForegroundColor White
 Write-Host ""
 Write-Host "Importa la coleccion de Postman:" -ForegroundColor Yellow
 Write-Host "  postman/Ecommerce-Kubernetes.postman_collection.json" -ForegroundColor White

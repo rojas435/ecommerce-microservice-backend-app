@@ -1,0 +1,33 @@
+# Archivos sensibles - NO commitear
+.env
+*.log
+*.key
+*.pem
+
+# Datos de Jenkins
+jenkins_home/
+jenkins_data/
+
+# Datos de SonarQube
+sonarqube_data/
+sonarqube_extensions/
+sonarqube_logs/
+postgresql_data/
+
+# Datos de Nexus (si se usa)
+nexus_data/
+
+# Backups
+*.tar.gz
+*.zip
+backups/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

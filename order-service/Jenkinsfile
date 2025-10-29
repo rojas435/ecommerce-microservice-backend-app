@@ -1,0 +1,65 @@
+// Declarative Jenkins pipeline for order-service (Dev pipeline)
+pipeline {
+  agent any
+
+  environment {
+    MAVEN_OPTS = '-Xmx1024m'
+    IMAGE_NAME = 'order-service'
+    DOCKER_REGISTRY = '' // e.g. registry.example.com/your-org
+    DOCKER_CREDENTIALS_ID = 'docker-registry-credentials' // create in Jenkins Credentials
+    PUBLISH = 'false' // set to 'true' in branch/job config to push images
+  }
+
+  options {
+    timestamps()
+    ansiColor('xterm')
+    timeout(time: 60, unit: 'MINUTES')
+  }
+
+  stages {
+    stage('Checkout') {
+      steps {
+        checkout scm
+      }
+    }
+
+    stage('Build & Unit Tests') {
+      steps {
+        echo 'Running Maven build and unit tests'
+        sh 'mvn -B -V -U -DskipTests=false clean package'
+      }
+    }
+
+    stage('Archive Artifact') {
+      steps {
+        archiveArtifacts artifacts: 'target/*.jar', fingerprint: true, allowEmptyArchive: false
+      }
+    }
+
+    stage('Optional: Docker Build & Push') {
+      when {
+        expression { return env.PUBLISH == 'true' && env.DOCKER_REGISTRY }
+      }
+      steps {
+        script {
+          def imageFullName = "${env.DOCKER_REGISTRY}/${env.IMAGE_NAME}:${env.BUILD_NUMBER}"
+          withCredentials([usernamePassword(credentialsId: env.DOCKER_CREDENTIALS_ID, usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+            sh "docker build -t ${imageFullName} ."
+            sh "echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin ${env.DOCKER_REGISTRY}"
+            sh "docker push ${imageFullName}"
+          }
+        }
+      }
+    }
+  }
+
+  post {
+    always {
+      junit '**/target/surefire-reports/*.xml'
+      archiveArtifacts artifacts: '**/target/*.jar', allowEmptyArchive: true
+    }
+    failure {
+      echo 'Build failed — check console output and test reports.'
+    }
+  }
+}

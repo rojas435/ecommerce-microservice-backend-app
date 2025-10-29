@@ -1,0 +1,21 @@
+# Jenkins Plugins - Esenciales para DevOps
+
+# === CORE PLUGINS ===
+git:latest
+github:latest
+workflow-aggregator:latest          # Pipeline plugin
+pipeline-stage-view:latest
+
+# === BUILD & DEPLOYMENT ===
+docker-plugin:latest
+docker-workflow:latest
+kubernetes:latest
+kubernetes-cli:latest
+
+# === CODE QUALITY ===
+sonar:latest                        # SonarQube Scanner
+
+# === UTILITIES ===
+timestamper:latest
+ws-cleanup:latest
+ansicolor:latest

@@ -54,16 +54,20 @@ Start-Sleep -Milliseconds 500
 Start-PortForward "product-service" 8500
 Start-Sleep -Milliseconds 500
 
-Start-PortForward "user-service" 8700
+Start-PortForward "user-service" 8400
 Start-Sleep -Milliseconds 500
 
 Start-PortForward "favourite-service" 8800
 Start-Sleep -Milliseconds 500
 
-Start-PortForward "shipping-service" 8600
+Start-PortForward "shipping-service" 8700
 Start-Sleep -Milliseconds 500
 
-Start-PortForward "payment-service" 8400
+Start-PortForward "payment-service" 8600
+Start-Sleep -Milliseconds 500
+
+# Order Service
+Start-PortForward "order-service" 8300
 
 Start-Sleep -Seconds 2
 
@@ -76,10 +80,11 @@ Write-Host "📮 Ahora puedes usar Postman con estas URLs:" -ForegroundColor Cya
 Write-Host ""
 Write-Host "   API Gateway:         http://localhost:8080" -ForegroundColor White
 Write-Host "   Product Service:     http://localhost:8500" -ForegroundColor White
-Write-Host "   User Service:        http://localhost:8700" -ForegroundColor White
+Write-Host "   User Service:        http://localhost:8400" -ForegroundColor White
 Write-Host "   Favourite Service:   http://localhost:8800" -ForegroundColor White
-Write-Host "   Shipping Service:    http://localhost:8600" -ForegroundColor White
-Write-Host "   Payment Service:     http://localhost:8400" -ForegroundColor White
+Write-Host "   Shipping Service:    http://localhost:8700" -ForegroundColor White
+Write-Host "   Payment Service:     http://localhost:8600" -ForegroundColor White
+Write-Host "   Order Service:       http://localhost:8300" -ForegroundColor White
 Write-Host ""
 Write-Host "🧪 Ejemplos de endpoints:" -ForegroundColor Cyan
 Write-Host "   GET http://localhost:8500/product-service/api/products" -ForegroundColor Yellow
