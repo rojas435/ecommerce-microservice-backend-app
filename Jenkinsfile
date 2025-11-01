@@ -1,5 +1,7 @@
 pipeline {
-  agent any
+  agent {
+    label 'maven'
+  }
   options {
     ansiColor('xterm')
     timestamps()
@@ -17,8 +19,10 @@ pipeline {
       parallel {
         stage('order-service') {
           steps {
-            dir('order-service') {
-              sh 'mvn -B -U -DskipTests=false clean package'
+            container('maven') {
+              dir('order-service') {
+                sh 'mvn -B -U -DskipTests=false clean package'
+              }
             }
           }
           post {
@@ -30,8 +34,10 @@ pipeline {
         }
         stage('payment-service') {
           steps {
-            dir('payment-service') {
-              sh 'mvn -B -U -DskipTests=false clean package'
+            container('maven') {
+              dir('payment-service') {
+                sh 'mvn -B -U -DskipTests=false clean package'
+              }
             }
           }
           post {
@@ -43,8 +49,10 @@ pipeline {
         }
         stage('shipping-service') {
           steps {
-            dir('shipping-service') {
-              sh 'mvn -B -U -DskipTests=false clean package'
+            container('maven') {
+              dir('shipping-service') {
+                sh 'mvn -B -U -DskipTests=false clean package'
+              }
             }
           }
           post {
@@ -59,13 +67,15 @@ pipeline {
 
     stage('SonarQube Analysis') {
       steps {
-        withSonarQubeEnv('SonarQube') {
-          sh '''
-            mvn -B -U \
-              -pl order-service,payment-service,shipping-service -am \
-              -DskipTests=false \
-              test org.jacoco:jacoco-maven-plugin:0.8.8:report sonar:sonar
-          '''
+        container('maven') {
+          withSonarQubeEnv('SonarQube') {
+            sh '''
+              mvn -B -U \
+                -pl order-service,payment-service,shipping-service -am \
+                -DskipTests=false \
+                test org.jacoco:jacoco-maven-plugin:0.8.8:report sonar:sonar
+            '''
+          }
         }
       }
     }
@@ -86,7 +96,7 @@ pipeline {
           } catch (Exception e) {
             echo "Quality Gate timeout or error: ${e.message}"
             echo "Continuing pipeline - check Sonar dashboard manually"
-            echo "Dashboard: http://sonarqube:9000/dashboard?id=com.selimhorri%3Aecommerce-microservice-backend"
+            echo "Dashboard: http://sonarqube.sonarqube.svc.cluster.local:9000/dashboard?id=com.selimhorri%3Aecommerce-microservice-backend"
           }
         }
       }
@@ -95,8 +105,10 @@ pipeline {
     stage('E2E (optional)') {
       when { expression { return params.RUN_E2E } }
       steps {
-        dir('e2e-tests') {
-          sh 'mvn -B -U clean test'
+        container('maven') {
+          dir('e2e-tests') {
+            sh 'mvn -B -U clean test'
+          }
         }
       }
       post {
