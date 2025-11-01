@@ -3,8 +3,6 @@ pipeline {
     label 'maven'
   }
   options {
-    ansiColor('xterm')
-    timestamps()
     timeout(time: 30, unit: 'MINUTES')
   }
   parameters {
