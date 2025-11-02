@@ -10,7 +10,7 @@ pipeline {
           serviceAccountName: jenkins-agent
           containers:
           - name: maven
-            image: maven:3.8.6-openjdk-11
+            image: maven:3.9.9-eclipse-temurin-17
             command: ['sleep']
             args: ['99d']
             resources:
