@@ -21,7 +21,7 @@ pipeline {
                 memory: "2Gi"
                 cpu: "1000m"
           - name: kubectl
-            image: bitnami/kubectl:1.24
+            image: bitnami/kubectl:latest
             command: ['sleep']
             args: ['99d']
             resources:
