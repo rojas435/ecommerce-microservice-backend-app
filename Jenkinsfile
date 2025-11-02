@@ -52,7 +52,7 @@ pipeline {
           steps {
             container('maven') {
               dir('order-service') {
-                sh 'mvn -B -U clean package -Dtest="!**/*IntegrationTest"'
+                sh 'mvn -B -U clean package -Dtest="!**/*IntegrationTest" -DfailIfNoTests=false'
               }
             }
           }
@@ -67,7 +67,7 @@ pipeline {
           steps {
             container('maven') {
               dir('payment-service') {
-                sh 'mvn -B -U clean package -Dtest="!**/*IntegrationTest"'
+                sh 'mvn -B -U clean package -Dtest="!**/*IntegrationTest" -DfailIfNoTests=false'
               }
             }
           }
@@ -82,7 +82,7 @@ pipeline {
           steps {
             container('maven') {
               dir('shipping-service') {
-                sh 'mvn -B -U clean package -Dtest="!**/*IntegrationTest"'
+                sh 'mvn -B -U clean package -Dtest="!**/*IntegrationTest" -DfailIfNoTests=false'
               }
             }
           }
@@ -103,7 +103,7 @@ pipeline {
             sh '''
               mvn -B -U \
                 -pl order-service,payment-service,shipping-service -am \
-                -Dtest="!**/*IntegrationTest" \
+                -Dtest="!**/*IntegrationTest" -DfailIfNoTests=false \
                 test org.jacoco:jacoco-maven-plugin:0.8.8:report sonar:sonar
             '''
           }
