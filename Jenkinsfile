@@ -21,9 +21,9 @@ pipeline {
                 memory: "2Gi"
                 cpu: "1000m"
           - name: kubectl
-            image: bitnami/kubectl:latest
-            command: ['sleep']
-            args: ['99d']
+            image: alpine/k8s:1.28.3
+            command: ['cat']
+            tty: true
             resources:
               requests:
                 memory: "128Mi"
