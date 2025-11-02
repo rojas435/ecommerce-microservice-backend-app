@@ -14,23 +14,44 @@ import static org.hamcrest.Matchers.*;
 /**
  * Base configuration for E2E tests.
  * Sets up RestAssured defaults and service endpoints.
+ * Automatically detects Kubernetes environment and uses internal service names.
  */
 public class BaseE2ETest {
 
-    // Service base URLs (configured via port-forward or LoadBalancer)
-    protected static final String API_GATEWAY_URL = System.getProperty("api.gateway.url", "http://localhost:8080");
-    protected static final String PRODUCT_SERVICE_URL = System.getProperty("product.service.url", "http://localhost:8500");
-    protected static final String USER_SERVICE_URL = System.getProperty("user.service.url", "http://localhost:8700");
-    protected static final String ORDER_SERVICE_URL = System.getProperty("order.service.url", "http://localhost:8300");
-    protected static final String PAYMENT_SERVICE_URL = System.getProperty("payment.service.url", "http://localhost:8400");
-    protected static final String SHIPPING_SERVICE_URL = System.getProperty("shipping.service.url", "http://localhost:8600");
-    protected static final String FAVOURITE_SERVICE_URL = System.getProperty("favourite.service.url", "http://localhost:8800");
+    // Detect if running in Kubernetes
+    private static final boolean IS_KUBERNETES = System.getenv("KUBERNETES_SERVICE_HOST") != null;
+    private static final String K8S_NAMESPACE = System.getenv("K8S_NAMESPACE") != null ? System.getenv("K8S_NAMESPACE") : "ecommerce";
+
+    // Service base URLs (auto-detect Kubernetes vs localhost)
+    protected static final String API_GATEWAY_URL = System.getProperty("api.gateway.url", 
+        IS_KUBERNETES ? "http://api-gateway." + K8S_NAMESPACE + ".svc.cluster.local:8080" : "http://localhost:8080");
+    protected static final String PRODUCT_SERVICE_URL = System.getProperty("product.service.url", 
+        IS_KUBERNETES ? "http://product-service." + K8S_NAMESPACE + ".svc.cluster.local:8500" : "http://localhost:8500");
+    protected static final String USER_SERVICE_URL = System.getProperty("user.service.url", 
+        IS_KUBERNETES ? "http://user-service." + K8S_NAMESPACE + ".svc.cluster.local:8700" : "http://localhost:8700");
+    protected static final String ORDER_SERVICE_URL = System.getProperty("order.service.url", 
+        IS_KUBERNETES ? "http://order-service." + K8S_NAMESPACE + ".svc.cluster.local:8300" : "http://localhost:8300");
+    protected static final String PAYMENT_SERVICE_URL = System.getProperty("payment.service.url", 
+        IS_KUBERNETES ? "http://payment-service." + K8S_NAMESPACE + ".svc.cluster.local:8400" : "http://localhost:8400");
+    protected static final String SHIPPING_SERVICE_URL = System.getProperty("shipping.service.url", 
+        IS_KUBERNETES ? "http://shipping-service." + K8S_NAMESPACE + ".svc.cluster.local:8600" : "http://localhost:8600");
+    protected static final String FAVOURITE_SERVICE_URL = System.getProperty("favourite.service.url", 
+        IS_KUBERNETES ? "http://favourite-service." + K8S_NAMESPACE + ".svc.cluster.local:8800" : "http://localhost:8800");
 
     // Common request specification
     protected static RequestSpecification requestSpec;
 
     @BeforeAll
     public static void setup() {
+        // Log environment detection
+        System.out.println("==============================================");
+        System.out.println("🔍 E2E Test Environment Detection");
+        System.out.println("==============================================");
+        System.out.println("Running in Kubernetes: " + IS_KUBERNETES);
+        System.out.println("Namespace: " + K8S_NAMESPACE);
+        System.out.println("API Gateway URL: " + API_GATEWAY_URL);
+        System.out.println("==============================================");
+
         // Configure RestAssured defaults
         RestAssured.baseURI = API_GATEWAY_URL;
         RestAssured.enableLoggingOfRequestAndResponseIfValidationFails();
