@@ -223,15 +223,14 @@ pipeline {
           // Archive reports
           archiveArtifacts artifacts: 'performance-report.html,performance_stats.csv', allowEmptyArchive: true
           
-          // NOTE: publishHTML requires HTML Publisher Plugin to be installed in Jenkins
-          // Install from: Manage Jenkins → Manage Plugins → Available → "HTML Publisher Plugin"
-          // publishHTML([
-          //   reportDir: '.',
-          //   reportFiles: 'performance-report.html',
-          //   reportName: 'Locust Performance Report',
-          //   keepAll: true,
-          //   alwaysLinkToLastBuild: true
-          // ])
+          // Publish HTML report (requires HTML Publisher Plugin)
+          publishHTML([
+            reportDir: '.',
+            reportFiles: 'performance-report.html',
+            reportName: 'Locust Performance Report',
+            keepAll: true,
+            alwaysLinkToLastBuild: true
+          ])
         }
         cleanup {
           // Optional: Clean up job after extracting reports
