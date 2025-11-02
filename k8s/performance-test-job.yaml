@@ -1,0 +1,142 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: locustfile
+  namespace: ecommerce
+data:
+  locustfile.py: |
+    from locust import HttpUser, task, between
+    import random
+    import json
+    from datetime import datetime
+
+    class ReadHeavyUser(HttpUser):
+        """User that mostly reads (70% of traffic)"""
+        wait_time = between(1, 3)
+        weight = 7
+        
+        @task(10)
+        def browse_products(self):
+            self.client.get("/product-service/api/products", name="[Read] Browse Products")
+        
+        @task(5)
+        def view_product(self):
+            product_id = random.randint(1, 20)
+            self.client.get(f"/product-service/api/products/{product_id}", name="[Read] View Product")
+        
+        @task(2)
+        def view_orders(self):
+            self.client.get("/order-service/api/orders", name="[Read] View Orders")
+
+    class WriteHeavyUser(HttpUser):
+        """User that performs writes (30% of traffic)"""
+        wait_time = between(2, 5)
+        weight = 3
+        
+        @task(5)
+        def create_order(self):
+            payload = {
+                "orderDate": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+                "orderDesc": f"Load test order {random.randint(1000, 9999)}",
+                "orderFee": round(random.uniform(50.0, 500.0), 2),
+                "userId": random.randint(1, 10)
+            }
+            self.client.post("/order-service/api/orders", json=payload, name="[Write] Create Order")
+        
+        @task(3)
+        def add_favourite(self):
+            payload = {
+                "userId": random.randint(1, 10),
+                "productId": random.randint(1, 20),
+                "likeDate": datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+            }
+            self.client.post("/favourite-service/api/favourites", json=payload, name="[Write] Add Favourite")
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: locust-performance-test
+  namespace: ecommerce
+spec:
+  # Job will be deleted after 1 hour (successful or failed)
+  ttlSecondsAfterFinished: 3600
+  backoffLimit: 2  # Retry up to 2 times on failure
+  
+  template:
+    metadata:
+      labels:
+        app: locust-test
+    spec:
+      restartPolicy: Never
+      
+      # Init container to wait for API Gateway to be ready
+      initContainers:
+      - name: wait-for-api-gateway
+        image: busybox:1.35
+        command:
+        - sh
+        - -c
+        - |
+          echo "Waiting for API Gateway to be ready..."
+          until wget -q -O- http://api-gateway:8080/actuator/health 2>/dev/null | grep -q UP; do
+            echo "API Gateway not ready yet, waiting 5s..."
+            sleep 5
+          done
+          echo "API Gateway is ready!"
+      
+      containers:
+      - name: locust
+        image: locustio/locust:2.17.0
+        
+        # Command to run performance test
+        command:
+        - locust
+        - --locustfile=/locust/locustfile.py
+        - --host=http://api-gateway:8080
+        - --users=100          # Simulate 100 concurrent users
+        - --spawn-rate=10      # Spawn 10 users per second
+        - --run-time=3m        # Run for 3 minutes
+        - --headless           # No web UI (CI/CD mode)
+        - --html=/reports/performance-report.html
+        - --csv=/reports/performance
+        - --only-summary       # Print only summary in logs
+        
+        volumeMounts:
+        - name: locustfile
+          mountPath: /locust
+        - name: reports
+          mountPath: /reports
+        
+        resources:
+          requests:
+            cpu: 500m
+            memory: 512Mi
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+      
+      volumes:
+      - name: locustfile
+        configMap:
+          name: locustfile
+      - name: reports
+        emptyDir: {}
+
+---
+# Optional: Service to access Locust web UI during manual testing
+apiVersion: v1
+kind: Service
+metadata:
+  name: locust-web
+  namespace: ecommerce
+spec:
+  type: NodePort
+  selector:
+    app: locust-master
+  ports:
+  - name: web
+    port: 8089
+    targetPort: 8089
+    nodePort: 30089

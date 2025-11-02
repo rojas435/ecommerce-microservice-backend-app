@@ -1,0 +1,7 @@
+# Performance test reports (HTML, CSV)
+*.html
+*.csv
+*.log
+
+# Keep directory structure
+!.gitkeep

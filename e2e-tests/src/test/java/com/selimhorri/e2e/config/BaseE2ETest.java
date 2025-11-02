@@ -1,15 +1,20 @@
 package com.selimhorri.e2e.config;
 
+import java.time.Duration;
+
+import static org.awaitility.Awaitility.await;
+import static org.hamcrest.Matchers.anyOf;
+import static org.hamcrest.Matchers.anything;
+import static org.hamcrest.Matchers.hasKey;
+import static org.hamcrest.Matchers.is;
+import org.junit.jupiter.api.BeforeAll;
+
 import io.restassured.RestAssured;
+import static io.restassured.RestAssured.given;
 import io.restassured.builder.RequestSpecBuilder;
 import io.restassured.filter.log.RequestLoggingFilter;
 import io.restassured.filter.log.ResponseLoggingFilter;
 import io.restassured.specification.RequestSpecification;
-import org.junit.jupiter.api.BeforeAll;
-import java.time.Duration;
-import static org.awaitility.Awaitility.await;
-import static io.restassured.RestAssured.given;
-import static org.hamcrest.Matchers.*;
 
 /**
  * Base configuration for E2E tests.

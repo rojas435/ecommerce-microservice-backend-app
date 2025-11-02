@@ -7,6 +7,7 @@ pipeline {
   }
   parameters {
     booleanParam(name: 'RUN_E2E', defaultValue: false, description: 'Ejecutar e2e-tests al final')
+    booleanParam(name: 'RUN_PERFORMANCE_TESTS', defaultValue: false, description: 'Ejecutar performance tests con Locust')
   }
   stages {
     stage('Checkout') {
@@ -112,6 +113,96 @@ pipeline {
       post {
         always {
           junit allowEmptyResults: true, testResults: 'e2e-tests/target/surefire-reports/*.xml'
+        }
+      }
+    }
+
+    stage('Performance Tests (optional)') {
+      when { expression { return params.RUN_PERFORMANCE_TESTS } }
+      steps {
+        container('kubectl') {
+          script {
+            echo '=== Starting Performance Tests with Locust ==='
+            
+            // Create ConfigMap with locustfile.py
+            sh '''
+              kubectl create configmap locustfile \
+                --from-file=locustfile.py \
+                --namespace=ecommerce \
+                --dry-run=client -o yaml | kubectl apply -f -
+            '''
+            
+            // Delete previous job if exists
+            sh 'kubectl delete job locust-performance-test -n ecommerce --ignore-not-found=true'
+            sh 'sleep 5'
+            
+            // Apply performance test job
+            sh 'kubectl apply -f k8s/performance-test-job.yaml'
+            
+            // Wait for job to complete (max 10 minutes)
+            sh '''
+              kubectl wait --for=condition=complete \
+                --timeout=600s \
+                job/locust-performance-test -n ecommerce || true
+            '''
+            
+            // Get job status
+            def jobStatus = sh(
+              script: 'kubectl get job locust-performance-test -n ecommerce -o jsonpath=\'{.status.conditions[0].type}\'',
+              returnStdout: true
+            ).trim()
+            
+            echo "Job status: ${jobStatus}"
+            
+            // Get pod name
+            def podName = sh(
+              script: 'kubectl get pods -n ecommerce -l job-name=locust-performance-test -o jsonpath=\'{.items[0].metadata.name}\'',
+              returnStdout: true
+            ).trim()
+            
+            echo "Pod name: ${podName}"
+            
+            // Print logs
+            sh "kubectl logs -n ecommerce ${podName} || true"
+            
+            // Extract HTML report
+            sh """
+              kubectl cp ecommerce/${podName}:/reports/performance-report.html \
+                ./performance-report.html || echo 'Failed to copy HTML report'
+            """
+            
+            // Extract CSV report
+            sh """
+              kubectl cp ecommerce/${podName}:/reports/performance_stats.csv \
+                ./performance_stats.csv || echo 'Failed to copy CSV report'
+            """
+            
+            // Validate job completed successfully
+            if (jobStatus != 'Complete') {
+              error "Performance test job failed or timed out"
+            }
+            
+            echo '=== Performance Tests Completed ==='
+          }
+        }
+      }
+      post {
+        always {
+          // Archive reports
+          archiveArtifacts artifacts: 'performance-report.html,performance_stats.csv', allowEmptyArchive: true
+          
+          // Publish HTML report
+          publishHTML([
+            reportDir: '.',
+            reportFiles: 'performance-report.html',
+            reportName: 'Locust Performance Report',
+            keepAll: true,
+            alwaysLinkToLastBuild: true
+          ])
+        }
+        cleanup {
+          // Optional: Clean up job after extracting reports
+          sh 'kubectl delete job locust-performance-test -n ecommerce --ignore-not-found=true || true'
         }
       }
     }
