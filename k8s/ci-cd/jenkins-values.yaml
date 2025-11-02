@@ -1,0 +1,88 @@
+# Jenkins Helm Values - Configuración para K8s
+
+controller:
+  # Tipo de servicio
+  serviceType: ClusterIP
+  
+  # Recursos del controller
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "2"
+      memory: "2Gi"
+  
+  # Java options
+  javaOpts: "-Xmx1g -Xms512m"
+  
+  # RBAC y Service Account
+  rbac:
+    create: true
+  serviceAccount:
+    create: true
+  
+  # Plugins a instalar (solo esenciales)
+  installPlugins:
+    - kubernetes:latest
+    - workflow-aggregator:latest
+    - git:latest
+    - configuration-as-code:latest
+    - sonar:latest
+    - pipeline-stage-view:latest
+    - github:latest
+    - junit:latest
+  
+  # Jenkins Configuration as Code (JCasC)
+  JCasC:
+    defaultConfig: true
+    configScripts:
+      sonar-config: |
+        unclassified:
+          sonarglobalconfiguration:
+            buildWrapperEnabled: true
+            installations:
+              - name: "SonarQube"
+                serverUrl: "http://sonarqube.sonarqube.svc.cluster.local:9000"
+                credentialsId: "sonar-token"
+      
+      kubernetes-cloud: |
+        jenkins:
+          clouds:
+            - kubernetes:
+                name: "kubernetes"
+                serverUrl: "https://kubernetes.default.svc.cluster.local"
+                skipTlsVerify: true
+                namespace: "jenkins"
+                jenkinsUrl: "http://jenkins:8080"
+                jenkinsTunnel: "jenkins-agent:50000"
+                templates:
+                  - name: "maven-kubectl"
+                    label: "maven"
+                    nodeUsageMode: NORMAL
+                    containers:
+                      - name: "maven"
+                        image: "maven:3.9-eclipse-temurin-17"
+                        command: "sleep"
+                        args: "99999"
+                        resourceRequestCpu: "500m"
+                        resourceRequestMemory: "1Gi"
+                        resourceLimitCpu: "1"
+                        resourceLimitMemory: "2Gi"
+                      - name: "kubectl"
+                        image: "bitnami/kubectl:1.31"
+                        command: "sleep"
+                        args: "99999"
+                        resourceRequestCpu: "100m"
+                        resourceRequestMemory: "128Mi"
+                        resourceLimitCpu: "200m"
+                        resourceLimitMemory: "256Mi"
+                    serviceAccount: "jenkins"
+
+# Agente (no necesario con Kubernetes cloud)
+agent:
+  enabled: false
+
+# Persistencia deshabilitada (desarrollo)
+persistence:
+  enabled: false

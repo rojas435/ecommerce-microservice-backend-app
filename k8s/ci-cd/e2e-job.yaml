@@ -1,0 +1,87 @@
+# Kubernetes Job para ejecutar E2E Tests
+# Se ejecuta desde Jenkins después de deployar microservicios
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: e2e-tests
+  namespace: ecommerce
+spec:
+  # Solo 1 intento (no reintentar si falla)
+  backoffLimit: 0
+  
+  # Limpiar job después de 1 hora
+  ttlSecondsAfterFinished: 3600
+  
+  template:
+    spec:
+      restartPolicy: Never
+      
+      containers:
+        - name: e2e-runner
+          image: maven:3.8.6-openjdk-11
+          
+          command: ["mvn"]
+          args: 
+            - "clean"
+            - "test"
+            - "-f"
+            - "/workspace/e2e-tests/pom.xml"
+            - "-Dtest=*E2ETest"
+          
+          # Variables de entorno para endpoints internos
+          env:
+            - name: API_GATEWAY_URL
+              value: "http://api-gateway-service.ecommerce.svc.cluster.local:8080"
+            - name: USER_SERVICE_URL
+              value: "http://user-service.ecommerce.svc.cluster.local:8081"
+            - name: ORDER_SERVICE_URL
+              value: "http://order-service.ecommerce.svc.cluster.local:8082"
+            - name: PAYMENT_SERVICE_URL
+              value: "http://payment-service.ecommerce.svc.cluster.local:8083"
+            - name: SHIPPING_SERVICE_URL
+              value: "http://shipping-service.ecommerce.svc.cluster.local:8084"
+            - name: KUBERNETES_SERVICE_HOST
+              value: "kubernetes.default.svc.cluster.local"
+          
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "1"
+          
+          # Montar código fuente
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+              readOnly: true
+      
+      volumes:
+        # OPCIÓN 1: Usar hostPath (desarrollo)
+        # Requiere que el código esté en el nodo de Minikube
+        - name: workspace
+          hostPath:
+            path: /hosthome/workspace
+            type: Directory
+        
+        # OPCIÓN 2: Usar PVC (producción)
+        # Descomentar si usas Persistent Volume
+        # - name: workspace
+        #   persistentVolumeClaim:
+        #     claimName: jenkins-workspace-pvc
+
+---
+# ConfigMap con endpoints (alternativa a env vars)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: e2e-config
+  namespace: ecommerce
+data:
+  API_GATEWAY_URL: "http://api-gateway-service.ecommerce.svc.cluster.local:8080"
+  USER_SERVICE_URL: "http://user-service.ecommerce.svc.cluster.local:8081"
+  ORDER_SERVICE_URL: "http://order-service.ecommerce.svc.cluster.local:8082"
+  PAYMENT_SERVICE_URL: "http://payment-service.ecommerce.svc.cluster.local:8083"
+  SHIPPING_SERVICE_URL: "http://shipping-service.ecommerce.svc.cluster.local:8084"

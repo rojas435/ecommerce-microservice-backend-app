@@ -1,6 +1,38 @@
 pipeline {
   agent {
-    label 'maven'
+    kubernetes {
+      yaml '''
+        apiVersion: v1
+        kind: Pod
+        metadata:
+          namespace: ecommerce
+        spec:
+          serviceAccountName: jenkins-agent
+          containers:
+          - name: maven
+            image: maven:3.8.6-openjdk-11
+            command: ['sleep']
+            args: ['99d']
+            resources:
+              requests:
+                memory: "1Gi"
+                cpu: "500m"
+              limits:
+                memory: "2Gi"
+                cpu: "1000m"
+          - name: kubectl
+            image: bitnami/kubectl:1.24
+            command: ['sleep']
+            args: ['99d']
+            resources:
+              requests:
+                memory: "128Mi"
+                cpu: "100m"
+              limits:
+                memory: "256Mi"
+                cpu: "200m"
+      '''
+    }
   }
   options {
     timeout(time: 30, unit: 'MINUTES')

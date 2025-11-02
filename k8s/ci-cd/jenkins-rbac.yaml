@@ -1,0 +1,64 @@
+# RBAC para Jenkins en Kubernetes
+# Permite a Jenkins deployar y gestionar recursos en el cluster
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: jenkins
+  namespace: jenkins
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: jenkins-admin
+rules:
+  # Permisos para gestionar pods (agents)
+  - apiGroups: [""]
+    resources: ["pods", "pods/exec", "pods/log"]
+    verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+  
+  # Permisos para deployments
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets", "statefulsets"]
+    verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+  
+  # Permisos para services
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+  
+  # Permisos para configmaps y secrets
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets"]
+    verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+  
+  # Permisos para jobs (E2E tests)
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+  
+  # Permisos para namespaces
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list"]
+  
+  # Permisos para eventos (debugging)
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: jenkins-admin-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: jenkins-admin
+subjects:
+  - kind: ServiceAccount
+    name: jenkins
+    namespace: jenkins

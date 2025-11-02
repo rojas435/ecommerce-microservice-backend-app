@@ -566,6 +566,8 @@ This will result in the following response:
 }
 ```
 ### Testing Them All
+
+#### E2E Tests
 Now it's time to test all the application functionality as one part. To do so just run
  the following automation test script:
 
@@ -576,6 +578,67 @@ selim@:~/ecommerce-microservice-backend-app$ ./test-em-all.sh start
 >1. start docker, 
 >2. run the tests, 
 >3. stop the docker instances.
+
+#### Performance Tests with Locust
+
+Performance tests simulate concurrent users to measure throughput, response times, and error rates. We use [Locust](https://locust.io/) for load testing.
+
+**Prerequisites:**
+```bash
+# Install Locust
+pip install -r requirements-performance.txt
+
+# Or directly
+pip install locust
+```
+
+**Running Performance Tests:**
+
+1. **Local execution** (with port-forward):
+```bash
+# Terminal 1: Port-forward API Gateway
+kubectl port-forward -n ecommerce svc/api-gateway 8080:8080
+
+# Terminal 2: Run tests
+./run-performance-tests.sh local 100 3m
+
+# Or manually
+locust -f locustfile.py --host=http://localhost:8080 \
+       --users 100 --spawn-rate 10 --run-time 3m \
+       --headless --html reports/performance-report.html
+```
+
+2. **Kubernetes execution** (in-cluster):
+```bash
+./run-performance-tests.sh k8s 100 3m
+```
+
+3. **Interactive Web UI** (for manual testing):
+```bash
+# Port-forward API Gateway
+kubectl port-forward -n ecommerce svc/api-gateway 8080:8080
+
+# Start Locust Web UI
+locust -f locustfile.py --host=http://localhost:8080
+
+# Open browser at http://localhost:8089
+```
+
+**Tests Implemented:**
+- **ReadHeavyUser** (70%): Browse products, view details, view orders
+- **WriteHeavyUser** (30%): Create orders, add favourites, create payments
+- **RealisticUserJourney** (20%): Complete shopping flow
+
+**Expected Results:**
+- **Throughput**: > 50 RPS with 100 users
+- **Response Time**: < 200ms (GET), < 500ms (POST)
+- **Error Rate**: < 1%
+
+**Reports:**
+- HTML: `reports/performance-report.html`
+- CSV: `reports/performance_stats.csv`
+
+For detailed documentation, see [PERFORMANCE-TESTS.md](PERFORMANCE-TESTS.md)
 
 The result will look like this:
 

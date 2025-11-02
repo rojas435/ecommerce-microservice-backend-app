@@ -1,0 +1,59 @@
+# Pod Template para Jenkins Agent
+# Este pod se crea dinámicamente cuando Jenkins necesita ejecutar un build
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: maven-kubectl-agent
+  namespace: jenkins
+spec:
+  serviceAccountName: jenkins
+  containers:
+    # Contenedor principal con Maven y JDK
+    - name: maven
+      image: maven:3.8.6-openjdk-11
+      command:
+        - sleep
+      args:
+        - "99999"
+      resources:
+        requests:
+          memory: "1Gi"
+          cpu: "500m"
+        limits:
+          memory: "2Gi"
+          cpu: "1"
+      volumeMounts:
+        - name: maven-cache
+          mountPath: /root/.m2
+    
+    # Contenedor con kubectl para deployments
+    - name: kubectl
+      image: bitnami/kubectl:1.31
+      command:
+        - sleep
+      args:
+        - "99999"
+      resources:
+        requests:
+          memory: "128Mi"
+          cpu: "100m"
+        limits:
+          memory: "256Mi"
+          cpu: "200m"
+    
+    # Contenedor JNLP (requerido por Jenkins)
+    - name: jnlp
+      image: jenkins/inbound-agent:latest
+      resources:
+        requests:
+          memory: "256Mi"
+          cpu: "200m"
+        limits:
+          memory: "512Mi"
+          cpu: "500m"
+  
+  volumes:
+    # Caché de Maven (opcional pero mejora velocidad)
+    - name: maven-cache
+      emptyDir: {}
