@@ -99,6 +99,7 @@ spec:
         - --spawn-rate=10      # Spawn 10 users per second
         - --run-time=3m        # Run for 3 minutes
         - --headless           # No web UI (CI/CD mode)
+        - --web-port=8089      # Explicit port (prevents K8s env var issues)
         - --html=/reports/performance-report.html
         - --csv=/reports/performance
         - --only-summary       # Print only summary in logs
@@ -123,20 +124,3 @@ spec:
           name: locustfile
       - name: reports
         emptyDir: {}
-
----
-# Optional: Service to access Locust web UI during manual testing
-apiVersion: v1
-kind: Service
-metadata:
-  name: locust-web
-  namespace: ecommerce
-spec:
-  type: NodePort
-  selector:
-    app: locust-master
-  ports:
-  - name: web
-    port: 8089
-    targetPort: 8089
-    nodePort: 30089
