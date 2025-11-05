@@ -11,8 +11,12 @@ COPY . .
 # Download dependencies for the specific module (use module pom so parent relative paths resolve)
 RUN mvn -f order-service/pom.xml dependency:go-offline -B
 
-# Build the order-service module (skip tests - they run in the pipeline earlier)
-RUN mvn -f order-service/pom.xml clean package -DskipTests -B
+# Build the order-service module with memory constraints for Java compiler
+# -Dmaven.compiler.fork=false reduces memory by not forking separate compiler process
+# Skip tests as they run in the pipeline earlier
+RUN mvn -f order-service/pom.xml clean package -DskipTests -B \
+    -Dmaven.compiler.fork=false \
+    -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn
 
 # Stage 2: Runtime with JRE only (smaller image)
 FROM eclipse-temurin:17-jre-alpine

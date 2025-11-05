@@ -8,8 +8,12 @@ COPY . .
 # Download dependencies for the specific module
 RUN mvn -f shipping-service/pom.xml dependency:go-offline -B
 
-# Build the shipping-service module (skip tests - they run in the pipeline earlier)
-RUN mvn -f shipping-service/pom.xml clean package -DskipTests -B
+# Build the shipping-service module with memory constraints for Java compiler
+# -Dmaven.compiler.fork=false reduces memory by not forking separate compiler process
+# Skip tests as they run in the pipeline earlier
+RUN mvn -f shipping-service/pom.xml clean package -DskipTests -B \
+    -Dmaven.compiler.fork=false \
+    -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn
 
 FROM eclipse-temurin:17-jre-alpine
 RUN addgroup -S spring && adduser -S spring -G spring
