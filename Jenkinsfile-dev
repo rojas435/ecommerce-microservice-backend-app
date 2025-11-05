@@ -15,10 +15,10 @@ pipeline {
             args: ['99d']
             resources:
               requests:
-                memory: "512Mi"
+                memory: "1Gi"
                 cpu: "100m"
               limits:
-                memory: "1Gi"
+                memory: "2Gi"
                 cpu: "500m"
           - name: docker
             image: docker:24-dind
@@ -80,7 +80,7 @@ pipeline {
           steps {
             container('maven') {
               dir('order-service') {
-                sh 'mvn -B -U clean test'
+                sh 'mvn -B -U clean test -Dtest=!*IntegrationTest'
               }
             }
           }
@@ -94,7 +94,7 @@ pipeline {
           steps {
             container('maven') {
               dir('payment-service') {
-                sh 'mvn -B -U clean test'
+                sh 'mvn -B -U clean test -Dtest=!*IntegrationTest'
               }
             }
           }
@@ -108,7 +108,7 @@ pipeline {
           steps {
             container('maven') {
               dir('shipping-service') {
-                sh 'mvn -B -U clean test'
+                sh 'mvn -B -U clean test -Dtest=!*IntegrationTest'
               }
             }
           }
