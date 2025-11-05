@@ -31,3 +31,9 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### DockerHub & Secrets (DO NOT COMMIT) ###
+**/DOCKERHUB-SETUP.md
+**/.dockerhub-token
+**/dockerhub-secret.yaml
+**/*-credentials.yaml
