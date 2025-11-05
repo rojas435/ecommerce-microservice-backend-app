@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-service
+  namespace: ecommerce-stage
+  labels:
+    app: payment-service
+    environment: stage
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: payment-service
+  template:
+    metadata:
+      labels:
+        app: payment-service
+        environment: stage
+    spec:
+      imagePullSecrets:
+      - name: dockerhub-secret
+      containers:
+      - name: payment-service
+        image: rojas43529/payment-service:stage-latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8400
+          name: http
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "stage"
+        - name: SPRING_CLOUD_DISCOVERY_ENABLED
+          value: "false"
+        envFrom:
+        - configMapRef:
+            name: microservices-config
+        readinessProbe:
+          httpGet:
+            path: /actuator/health/readiness
+            port: 8400
+          initialDelaySeconds: 45
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /actuator/health/liveness
+            port: 8400
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: 500m
+            memory: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: payment-service
+  namespace: ecommerce-stage
+  labels:
+    app: payment-service
+spec:
+  selector:
+    app: payment-service
+  ports:
+  - port: 8400
+    targetPort: 8400
+    name: http
+  type: ClusterIP

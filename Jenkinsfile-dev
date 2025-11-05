@@ -246,6 +246,15 @@ pipeline {
     success {
       echo "✅ DEV Pipeline completed successfully!"
       echo "Images ready for STAGE promotion"
+      echo "=== Triggering STAGE pipeline ==="
+      
+      // Trigger STAGE pipeline with DEV image tag
+      build job: 'ecommerce-stage-pipeline',
+            wait: false,
+            parameters: [
+              string(name: 'DEV_IMAGE_TAG', value: "${IMAGE_TAG}"),
+              string(name: 'VERSION', value: "1.0.${BUILD_NUMBER}")
+            ]
     }
     failure {
       echo "❌ DEV Pipeline failed!"
