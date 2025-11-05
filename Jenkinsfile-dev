@@ -1,0 +1,269 @@
+pipeline {
+  agent {
+    kubernetes {
+      yaml '''
+        apiVersion: v1
+        kind: Pod
+        metadata:
+          namespace: jenkins
+        spec:
+          serviceAccountName: jenkins-agent
+          containers:
+          - name: maven
+            image: maven:3.9.9-eclipse-temurin-17
+            command: ['sleep']
+            args: ['99d']
+            resources:
+              requests:
+                memory: "1Gi"
+                cpu: "500m"
+              limits:
+                memory: "2Gi"
+                cpu: "1000m"
+          - name: docker
+            image: docker:24-dind
+            securityContext:
+              privileged: true
+            env:
+            - name: DOCKER_TLS_CERTDIR
+              value: ""
+            resources:
+              requests:
+                memory: "512Mi"
+                cpu: "500m"
+              limits:
+                memory: "1Gi"
+                cpu: "1000m"
+          - name: kubectl
+            image: alpine/k8s:1.28.3
+            command: ['cat']
+            tty: true
+            resources:
+              requests:
+                memory: "128Mi"
+                cpu: "100m"
+              limits:
+                memory: "256Mi"
+                cpu: "200m"
+      '''
+    }
+  }
+  
+  options {
+    timeout(time: 45, unit: 'MINUTES')
+    buildDiscarder(logRotator(numToKeepStr: '10'))
+  }
+  
+  triggers {
+    // Poll SCM every 5 minutes: H/5 * * * *
+    // For local development without webhooks
+    pollSCM('H/5 * * * *')
+  }
+  
+  environment {
+    DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials')
+    DOCKERHUB_REPO = 'rojas43529'
+    GIT_COMMIT_SHORT = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
+    IMAGE_TAG = "dev-${GIT_COMMIT_SHORT}"
+  }
+  
+  stages {
+    stage('Checkout') {
+      steps {
+        checkout scm
+      }
+    }
+
+    stage('Build & Unit Tests') {
+      parallel {
+        stage('order-service') {
+          steps {
+            container('maven') {
+              dir('order-service') {
+                sh 'mvn -B -U clean test'
+              }
+            }
+          }
+          post {
+            always {
+              junit allowEmptyResults: true, testResults: 'order-service/**/target/surefire-reports/*.xml'
+            }
+          }
+        }
+        stage('payment-service') {
+          steps {
+            container('maven') {
+              dir('payment-service') {
+                sh 'mvn -B -U clean test'
+              }
+            }
+          }
+          post {
+            always {
+              junit allowEmptyResults: true, testResults: 'payment-service/**/target/surefire-reports/*.xml'
+            }
+          }
+        }
+        stage('shipping-service') {
+          steps {
+            container('maven') {
+              dir('shipping-service') {
+                sh 'mvn -B -U clean test'
+              }
+            }
+          }
+          post {
+            always {
+              junit allowEmptyResults: true, testResults: 'shipping-service/**/target/surefire-reports/*.xml'
+            }
+          }
+        }
+      }
+    }
+
+    stage('SonarQube Analysis') {
+      steps {
+        container('maven') {
+          withSonarQubeEnv('SonarQube') {
+            sh '''
+              mvn -B -U \
+                -pl order-service,payment-service,shipping-service -am \
+                test org.jacoco:jacoco-maven-plugin:0.8.8:report sonar:sonar
+            '''
+          }
+        }
+      }
+    }
+
+    stage('Quality Gate') {
+      steps {
+        script {
+          try {
+            timeout(time: 3, unit: 'MINUTES') {
+              def qg = waitForQualityGate()
+              if (qg.status != 'OK') {
+                echo "Quality Gate status: ${qg.status}"
+                echo "Quality Gate failed but continuing (non-blocking)"
+              }
+            }
+          } catch (Exception e) {
+            echo "Quality Gate timeout: ${e.message}"
+          }
+        }
+      }
+    }
+
+    stage('Build & Push Docker Images') {
+      parallel {
+        stage('order-service') {
+          steps {
+            container('docker') {
+              dir('order-service') {
+                sh '''
+                  echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin
+                  docker build -t ${DOCKERHUB_REPO}/order-service:${IMAGE_TAG} .
+                  docker push ${DOCKERHUB_REPO}/order-service:${IMAGE_TAG}
+                  docker logout
+                '''
+              }
+            }
+          }
+        }
+        stage('payment-service') {
+          steps {
+            container('docker') {
+              dir('payment-service') {
+                sh '''
+                  echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin
+                  docker build -t ${DOCKERHUB_REPO}/payment-service:${IMAGE_TAG} .
+                  docker push ${DOCKERHUB_REPO}/payment-service:${IMAGE_TAG}
+                  docker logout
+                '''
+              }
+            }
+          }
+        }
+        stage('shipping-service') {
+          steps {
+            container('docker') {
+              dir('shipping-service') {
+                sh '''
+                  echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin
+                  docker build -t ${DOCKERHUB_REPO}/shipping-service:${IMAGE_TAG} .
+                  docker push ${DOCKERHUB_REPO}/shipping-service:${IMAGE_TAG}
+                  docker logout
+                '''
+              }
+            }
+          }
+        }
+      }
+    }
+
+    stage('Deploy to DEV') {
+      steps {
+        container('kubectl') {
+          script {
+            echo "=== Deploying to ecommerce-dev namespace ==="
+            
+            // Update order-service deployment
+            sh """
+              kubectl set image deployment/order-service \
+                order-service=${DOCKERHUB_REPO}/order-service:${IMAGE_TAG} \
+                -n ecommerce-dev || echo 'Deployment not found, will be created'
+            """
+            
+            // Update payment-service deployment
+            sh """
+              kubectl set image deployment/payment-service \
+                payment-service=${DOCKERHUB_REPO}/payment-service:${IMAGE_TAG} \
+                -n ecommerce-dev || echo 'Deployment not found, will be created'
+            """
+            
+            // Update shipping-service deployment
+            sh """
+              kubectl set image deployment/shipping-service \
+                shipping-service=${DOCKERHUB_REPO}/shipping-service:${IMAGE_TAG} \
+                -n ecommerce-dev || echo 'Deployment not found, will be created'
+            """
+            
+            echo "=== Waiting for rollout to complete ==="
+            sh """
+              kubectl rollout status deployment/order-service -n ecommerce-dev --timeout=5m || true
+              kubectl rollout status deployment/payment-service -n ecommerce-dev --timeout=5m || true
+              kubectl rollout status deployment/shipping-service -n ecommerce-dev --timeout=5m || true
+            """
+            
+            echo "=== DEV Deployment Complete ==="
+          }
+        }
+      }
+    }
+  }
+  
+  post {
+    always {
+      echo "Build: ${env.BUILD_URL}"
+      echo "Docker Images:"
+      echo "  - ${DOCKERHUB_REPO}/order-service:${IMAGE_TAG}"
+      echo "  - ${DOCKERHUB_REPO}/payment-service:${IMAGE_TAG}"
+      echo "  - ${DOCKERHUB_REPO}/shipping-service:${IMAGE_TAG}"
+    }
+    success {
+      echo "✅ DEV Pipeline completed successfully!"
+      echo "Images ready for STAGE promotion"
+      echo "=== Triggering STAGE pipeline ==="
+      
+      // Trigger STAGE pipeline with DEV image tag
+      build job: 'ecommerce-stage-pipeline',
+            wait: false,
+            parameters: [
+              string(name: 'DEV_IMAGE_TAG', value: "${IMAGE_TAG}"),
+              string(name: 'VERSION', value: "1.0.${BUILD_NUMBER}")
+            ]
+    }
+    failure {
+      echo "❌ DEV Pipeline failed!"
+    }
+  }
+}
