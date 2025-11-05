@@ -12,6 +12,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+//Prueba de pipeline
 @NoArgsConstructor
 @AllArgsConstructor
 @Data
