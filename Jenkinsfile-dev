@@ -130,10 +130,9 @@ pipeline {
         container('maven') {
           withSonarQubeEnv('SonarQube') {
             sh '''
-              mvn -B -U \
-                -pl order-service,payment-service,shipping-service -am \
-                jacoco:report sonar:sonar \
-                -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
+              cd order-service && mvn -B sonar:sonar && cd ..
+              cd payment-service && mvn -B sonar:sonar && cd ..
+              cd shipping-service && mvn -B sonar:sonar && cd ..
             '''
           }
         }
