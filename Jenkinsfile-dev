@@ -80,7 +80,7 @@ pipeline {
           steps {
             container('maven') {
               dir('order-service') {
-                sh 'mvn -B -U clean test -Dtest=!*IntegrationTest -DfailIfNoTests=false'
+                sh 'mvn -B -U clean test -Dsurefire.excludes="**/*IntegrationTest.java" -DfailIfNoTests=false'
               }
             }
           }
@@ -94,7 +94,7 @@ pipeline {
           steps {
             container('maven') {
               dir('payment-service') {
-                sh 'mvn -B -U clean test -Dtest=!*IntegrationTest -DfailIfNoTests=false'
+                sh 'mvn -B -U clean test -Dsurefire.excludes="**/*IntegrationTest.java" -DfailIfNoTests=false'
               }
             }
           }
@@ -108,7 +108,7 @@ pipeline {
           steps {
             container('maven') {
               dir('shipping-service') {
-                sh 'mvn -B -U clean test -Dtest=!*IntegrationTest -DfailIfNoTests=false'
+                sh 'mvn -B -U clean test -Dsurefire.excludes="**/*IntegrationTest.java" -DfailIfNoTests=false'
               }
             }
           }
@@ -128,7 +128,8 @@ pipeline {
             sh '''
               mvn -B -U \
                 -pl order-service,payment-service,shipping-service -am \
-                test org.jacoco:jacoco-maven-plugin:0.8.8:report sonar:sonar
+                jacoco:report sonar:sonar \
+                -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
             '''
           }
         }
