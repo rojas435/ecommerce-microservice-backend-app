@@ -54,6 +54,12 @@ pipeline {
     buildDiscarder(logRotator(numToKeepStr: '10'))
   }
   
+  triggers {
+    // Poll SCM every 5 minutes (for local Jenkins without webhooks)
+    // Will be triggered automatically from DEV pipeline on success
+    pollSCM('H/5 * * * *')
+  }
+  
   parameters {
     string(name: 'DEV_IMAGE_TAG', defaultValue: '', description: 'Tag de imagen DEV a promover (ej: dev-a1b2c3d)')
     string(name: 'VERSION', defaultValue: '1.0.0', description: 'Versión de STAGE (ej: 1.0.0)')

@@ -54,6 +54,12 @@ pipeline {
     buildDiscarder(logRotator(numToKeepStr: '10'))
   }
   
+  triggers {
+    // Poll SCM every 5 minutes: H/5 * * * *
+    // For local development without webhooks
+    pollSCM('H/5 * * * *')
+  }
+  
   environment {
     DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials')
     DOCKERHUB_REPO = 'rojas43529'
