@@ -4,17 +4,15 @@ FROM maven:3.9.9-eclipse-temurin-17 AS builder
 
 WORKDIR /build
 
-# Copy only pom.xml first (better layer caching)
-COPY pom.xml .
+# Copy full repository into the build context so the parent POM and modules are available
+# Using full copy increases build layer size but ensures mvn can resolve multi-module structure
+COPY . .
 
-# Download dependencies (cached if pom.xml doesn't change)
-RUN mvn dependency:go-offline -B
+# Download dependencies for the specific module (use module pom so parent relative paths resolve)
+RUN mvn -f order-service/pom.xml dependency:go-offline -B
 
-# Copy source code
-COPY src ./src
-
-# Build application (skip tests - they run in CI/CD)
-RUN mvn clean package -DskipTests -B
+# Build the order-service module (skip tests - they run in the pipeline earlier)
+RUN mvn -f order-service/pom.xml clean package -DskipTests -B
 
 # Stage 2: Runtime with JRE only (smaller image)
 FROM eclipse-temurin:17-jre-alpine
@@ -24,8 +22,8 @@ RUN addgroup -S spring && adduser -S spring -G spring
 
 WORKDIR /app
 
-# Copy JAR from builder stage
-COPY --from=builder /build/target/*.jar app.jar
+# Copy JAR from builder stage (module target path)
+COPY --from=builder /build/order-service/target/*.jar app.jar
 
 # Change ownership to non-root user
 RUN chown spring:spring app.jar
