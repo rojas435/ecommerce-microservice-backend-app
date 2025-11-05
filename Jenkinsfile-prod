@@ -1,0 +1,399 @@
+pipeline {
+  agent {
+    kubernetes {
+      yaml '''
+        apiVersion: v1
+        kind: Pod
+        metadata:
+          namespace: jenkins
+        spec:
+          serviceAccountName: jenkins-agent
+          containers:
+          - name: docker
+            image: docker:24-dind
+            securityContext:
+              privileged: true
+            env:
+            - name: DOCKER_TLS_CERTDIR
+              value: ""
+            resources:
+              requests:
+                memory: "512Mi"
+                cpu: "500m"
+              limits:
+                memory: "1Gi"
+                cpu: "1000m"
+          - name: kubectl
+            image: alpine/k8s:1.28.3
+            command: ['cat']
+            tty: true
+            resources:
+              requests:
+                memory: "128Mi"
+                cpu: "100m"
+              limits:
+                memory: "256Mi"
+                cpu: "200m"
+          - name: curl
+            image: curlimages/curl:8.4.0
+            command: ['sleep']
+            args: ['99d']
+            resources:
+              requests:
+                memory: "64Mi"
+                cpu: "50m"
+              limits:
+                memory: "128Mi"
+                cpu: "100m"
+      '''
+    }
+  }
+  
+  options {
+    timeout(time: 90, unit: 'MINUTES')
+    buildDiscarder(logRotator(numToKeepStr: '20'))
+  }
+  
+  parameters {
+    string(name: 'STABLE_VERSION', defaultValue: '', description: 'Versión STABLE a promover (ej: 1.0.5)')
+    booleanParam(name: 'SKIP_APPROVAL', defaultValue: false, description: 'Omitir aprobación manual (solo para emergencias)')
+  }
+  
+  environment {
+    DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials')
+    DOCKERHUB_REPO = 'rojas43529'
+    STABLE_TAG = "stable-${params.STABLE_VERSION}"
+    PROD_TAG = "prod-${params.STABLE_VERSION}"
+    PROD_NAMESPACE = "ecommerce"
+  }
+  
+  stages {
+    stage('Validate Parameters') {
+      steps {
+        script {
+          if (!params.STABLE_VERSION) {
+            error "STABLE_VERSION parameter is required!"
+          }
+          echo "=== Production Deployment ==="
+          echo "STABLE version: ${STABLE_TAG}"
+          echo "PROD tag:       ${PROD_TAG}"
+          echo "Target:         ${PROD_NAMESPACE} namespace"
+        }
+      }
+    }
+
+    stage('Manual Approval') {
+      when {
+        expression { !params.SKIP_APPROVAL }
+      }
+      steps {
+        script {
+          echo "⚠️  PRODUCTION DEPLOYMENT REQUIRES APPROVAL ⚠️"
+          echo ""
+          echo "About to deploy:"
+          echo "  - order-service:${STABLE_TAG} → ${PROD_TAG}"
+          echo "  - payment-service:${STABLE_TAG} → ${PROD_TAG}"
+          echo "  - shipping-service:${STABLE_TAG} → ${PROD_TAG}"
+          echo ""
+          echo "To namespace: ${PROD_NAMESPACE}"
+          
+          timeout(time: 30, unit: 'MINUTES') {
+            input message: '🚀 Deploy to PRODUCTION?',
+                  ok: 'Deploy',
+                  submitter: 'admin,devops-team',
+                  submitterParameter: 'APPROVER'
+          }
+          
+          echo "✅ Deployment approved!"
+        }
+      }
+    }
+
+    stage('Backup Current PROD') {
+      steps {
+        container('kubectl') {
+          script {
+            echo "=== Creating backup of current PROD deployments ==="
+            
+            sh '''
+              # Get current images
+              ORDER_IMAGE=$(kubectl get deployment order-service -n ${PROD_NAMESPACE} -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || echo "none")
+              PAYMENT_IMAGE=$(kubectl get deployment payment-service -n ${PROD_NAMESPACE} -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || echo "none")
+              SHIPPING_IMAGE=$(kubectl get deployment shipping-service -n ${PROD_NAMESPACE} -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || echo "none")
+              
+              echo "Current PROD images:"
+              echo "  order-service: ${ORDER_IMAGE}"
+              echo "  payment-service: ${PAYMENT_IMAGE}"
+              echo "  shipping-service: ${SHIPPING_IMAGE}"
+              
+              # Save to file for potential rollback
+              echo "ORDER_SERVICE_BACKUP=${ORDER_IMAGE}" > backup.env
+              echo "PAYMENT_SERVICE_BACKUP=${PAYMENT_IMAGE}" >> backup.env
+              echo "SHIPPING_SERVICE_BACKUP=${SHIPPING_IMAGE}" >> backup.env
+            '''
+            
+            archiveArtifacts artifacts: 'backup.env', fingerprint: true
+          }
+        }
+      }
+    }
+
+    stage('Re-tag Docker Images to PROD') {
+      parallel {
+        stage('order-service') {
+          steps {
+            container('docker') {
+              sh '''
+                echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin
+                
+                # Pull STABLE image
+                docker pull ${DOCKERHUB_REPO}/order-service:${STABLE_TAG}
+                
+                # Re-tag to PROD
+                docker tag ${DOCKERHUB_REPO}/order-service:${STABLE_TAG} ${DOCKERHUB_REPO}/order-service:${PROD_TAG}
+                docker tag ${DOCKERHUB_REPO}/order-service:${STABLE_TAG} ${DOCKERHUB_REPO}/order-service:latest
+                
+                # Push PROD images
+                docker push ${DOCKERHUB_REPO}/order-service:${PROD_TAG}
+                docker push ${DOCKERHUB_REPO}/order-service:latest
+                
+                docker logout
+              '''
+            }
+          }
+        }
+        stage('payment-service') {
+          steps {
+            container('docker') {
+              sh '''
+                echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin
+                docker pull ${DOCKERHUB_REPO}/payment-service:${STABLE_TAG}
+                docker tag ${DOCKERHUB_REPO}/payment-service:${STABLE_TAG} ${DOCKERHUB_REPO}/payment-service:${PROD_TAG}
+                docker tag ${DOCKERHUB_REPO}/payment-service:${STABLE_TAG} ${DOCKERHUB_REPO}/payment-service:latest
+                docker push ${DOCKERHUB_REPO}/payment-service:${PROD_TAG}
+                docker push ${DOCKERHUB_REPO}/payment-service:latest
+                docker logout
+              '''
+            }
+          }
+        }
+        stage('shipping-service') {
+          steps {
+            container('docker') {
+              sh '''
+                echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin
+                docker pull ${DOCKERHUB_REPO}/shipping-service:${STABLE_TAG}
+                docker tag ${DOCKERHUB_REPO}/shipping-service:${STABLE_TAG} ${DOCKERHUB_REPO}/shipping-service:${PROD_TAG}
+                docker tag ${DOCKERHUB_REPO}/shipping-service:${STABLE_TAG} ${DOCKERHUB_REPO}/shipping-service:latest
+                docker push ${DOCKERHUB_REPO}/shipping-service:${PROD_TAG}
+                docker push ${DOCKERHUB_REPO}/shipping-service:latest
+                docker logout
+              '''
+            }
+          }
+        }
+      }
+    }
+
+    stage('Deploy to PROD') {
+      steps {
+        container('kubectl') {
+          script {
+            echo "=== Deploying to ${PROD_NAMESPACE} namespace (PRODUCTION) ==="
+            
+            // Update deployments with PROD tag
+            sh """
+              kubectl set image deployment/order-service \
+                order-service=${DOCKERHUB_REPO}/order-service:${PROD_TAG} \
+                -n ${PROD_NAMESPACE}
+              
+              kubectl set image deployment/payment-service \
+                payment-service=${DOCKERHUB_REPO}/payment-service:${PROD_TAG} \
+                -n ${PROD_NAMESPACE}
+              
+              kubectl set image deployment/shipping-service \
+                shipping-service=${DOCKERHUB_REPO}/shipping-service:${PROD_TAG} \
+                -n ${PROD_NAMESPACE}
+            """
+            
+            echo "=== Waiting for rollout to complete (with timeout) ==="
+            try {
+              timeout(time: 10, unit: 'MINUTES') {
+                sh """
+                  kubectl rollout status deployment/order-service -n ${PROD_NAMESPACE} --timeout=10m
+                  kubectl rollout status deployment/payment-service -n ${PROD_NAMESPACE} --timeout=10m
+                  kubectl rollout status deployment/shipping-service -n ${PROD_NAMESPACE} --timeout=10m
+                """
+              }
+            } catch (Exception e) {
+              error "Deployment rollout failed or timed out: ${e.message}"
+            }
+            
+            echo "=== Verifying pods are ready ==="
+            sh """
+              kubectl wait --for=condition=ready pod -l app=order-service -n ${PROD_NAMESPACE} --timeout=5m
+              kubectl wait --for=condition=ready pod -l app=payment-service -n ${PROD_NAMESPACE} --timeout=5m
+              kubectl wait --for=condition=ready pod -l app=shipping-service -n ${PROD_NAMESPACE} --timeout=5m
+            """
+          }
+        }
+      }
+    }
+
+    stage('Health Checks & Smoke Tests') {
+      steps {
+        container('kubectl') {
+          script {
+            echo "=== Running Health Checks ==="
+            
+            // Get pod names
+            def orderPod = sh(
+              script: "kubectl get pods -n ${PROD_NAMESPACE} -l app=order-service -o jsonpath='{.items[0].metadata.name}'",
+              returnStdout: true
+            ).trim()
+            
+            def paymentPod = sh(
+              script: "kubectl get pods -n ${PROD_NAMESPACE} -l app=payment-service -o jsonpath='{.items[0].metadata.name}'",
+              returnStdout: true
+            ).trim()
+            
+            def shippingPod = sh(
+              script: "kubectl get pods -n ${PROD_NAMESPACE} -l app=shipping-service -o jsonpath='{.items[0].metadata.name}'",
+              returnStdout: true
+            ).trim()
+            
+            echo "Checking health of:"
+            echo "  - ${orderPod}"
+            echo "  - ${paymentPod}"
+            echo "  - ${shippingPod}"
+            
+            // Health checks
+            def healthCheckFailed = false
+            
+            try {
+              sh """
+                kubectl exec ${orderPod} -n ${PROD_NAMESPACE} -- wget -q -O- http://localhost:8300/actuator/health || exit 1
+              """
+              echo "✅ order-service health check passed"
+            } catch (Exception e) {
+              echo "❌ order-service health check FAILED"
+              healthCheckFailed = true
+            }
+            
+            try {
+              sh """
+                kubectl exec ${paymentPod} -n ${PROD_NAMESPACE} -- wget -q -O- http://localhost:8400/actuator/health || exit 1
+              """
+              echo "✅ payment-service health check passed"
+            } catch (Exception e) {
+              echo "❌ payment-service health check FAILED"
+              healthCheckFailed = true
+            }
+            
+            try {
+              sh """
+                kubectl exec ${shippingPod} -n ${PROD_NAMESPACE} -- wget -q -O- http://localhost:8600/actuator/health || exit 1
+              """
+              echo "✅ shipping-service health check passed"
+            } catch (Exception e) {
+              echo "❌ shipping-service health check FAILED"
+              healthCheckFailed = true
+            }
+            
+            if (healthCheckFailed) {
+              error "Health checks failed! Triggering rollback..."
+            }
+            
+            echo "=== All health checks passed ✅ ==="
+          }
+        }
+      }
+    }
+
+    stage('Verify Deployment') {
+      steps {
+        container('kubectl') {
+          script {
+            echo "=== Final Verification ==="
+            
+            sh """
+              echo "Deployments:"
+              kubectl get deployments -n ${PROD_NAMESPACE} -l environment=prod || true
+              
+              echo ""
+              echo "Pods:"
+              kubectl get pods -n ${PROD_NAMESPACE} | grep -E '(order|payment|shipping)' || true
+              
+              echo ""
+              echo "Services:"
+              kubectl get services -n ${PROD_NAMESPACE} | grep -E '(order|payment|shipping)' || true
+            """
+          }
+        }
+      }
+    }
+  }
+  
+  post {
+    always {
+      echo "=== Production Deployment Summary ==="
+      echo "Build: ${env.BUILD_URL}"
+      echo "Version: ${params.STABLE_VERSION}"
+    }
+    success {
+      echo "🎉 PRODUCTION DEPLOYMENT SUCCESSFUL! 🎉"
+      echo ""
+      echo "Deployed images:"
+      echo "  - ${DOCKERHUB_REPO}/order-service:${PROD_TAG}"
+      echo "  - ${DOCKERHUB_REPO}/payment-service:${PROD_TAG}"
+      echo "  - ${DOCKERHUB_REPO}/shipping-service:${PROD_TAG}"
+      echo ""
+      echo "Also tagged as :latest"
+    }
+    failure {
+      echo "❌ PRODUCTION DEPLOYMENT FAILED!"
+      echo ""
+      echo "=== ROLLBACK INSTRUCTIONS ==="
+      echo "To rollback manually, use the backup.env artifact from this build"
+      echo "Or trigger a new deployment with the previous STABLE version"
+      
+      container('kubectl') {
+        script {
+          try {
+            echo ""
+            echo "=== Attempting automatic rollback ==="
+            
+            sh """
+              if [ -f backup.env ]; then
+                source backup.env
+                
+                if [ "\${ORDER_SERVICE_BACKUP}" != "none" ]; then
+                  kubectl set image deployment/order-service order-service=\${ORDER_SERVICE_BACKUP} -n ${PROD_NAMESPACE} || true
+                  kubectl rollout undo deployment/order-service -n ${PROD_NAMESPACE} || true
+                fi
+                
+                if [ "\${PAYMENT_SERVICE_BACKUP}" != "none" ]; then
+                  kubectl set image deployment/payment-service payment-service=\${PAYMENT_SERVICE_BACKUP} -n ${PROD_NAMESPACE} || true
+                  kubectl rollout undo deployment/payment-service -n ${PROD_NAMESPACE} || true
+                fi
+                
+                if [ "\${SHIPPING_SERVICE_BACKUP}" != "none" ]; then
+                  kubectl set image deployment/shipping-service shipping-service=\${SHIPPING_SERVICE_BACKUP} -n ${PROD_NAMESPACE} || true
+                  kubectl rollout undo deployment/shipping-service -n ${PROD_NAMESPACE} || true
+                fi
+              fi
+            """
+            
+            echo "✅ Rollback attempted. Verify manually!"
+          } catch (Exception e) {
+            echo "⚠️  Automatic rollback failed: ${e.message}"
+            echo "Please perform manual rollback!"
+          }
+        }
+      }
+    }
+    unstable {
+      echo "⚠️  PRODUCTION DEPLOYMENT UNSTABLE"
+    }
+  }
+}

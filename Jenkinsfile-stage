@@ -310,6 +310,21 @@ pipeline {
       echo "  - ${DOCKERHUB_REPO}/order-service:${STABLE_TAG}"
       echo "  - ${DOCKERHUB_REPO}/payment-service:${STABLE_TAG}"
       echo "  - ${DOCKERHUB_REPO}/shipping-service:${STABLE_TAG}"
+      echo ""
+      echo "⚠️  To deploy to PRODUCTION, manually trigger 'ecommerce-prod-pipeline'"
+      echo "   with STABLE_VERSION=${params.VERSION}"
+      
+      // OPCIONAL: Trigger automático de PROD (comentado por default debido a approval manual)
+      // Descomentar si se quiere flujo completamente automático hasta el approval
+      /*
+      echo "=== Triggering PROD pipeline (will wait for manual approval) ==="
+      build job: 'ecommerce-prod-pipeline',
+            wait: false,
+            parameters: [
+              string(name: 'STABLE_VERSION', value: "${params.VERSION}"),
+              booleanParam(name: 'SKIP_APPROVAL', value: false)
+            ]
+      */
     }
     failure {
       echo "❌ STAGE Pipeline failed!"
