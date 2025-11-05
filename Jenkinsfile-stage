@@ -54,6 +54,12 @@ pipeline {
     buildDiscarder(logRotator(numToKeepStr: '10'))
   }
   
+  triggers {
+    // Poll SCM every 5 minutes (for local Jenkins without webhooks)
+    // Will be triggered automatically from DEV pipeline on success
+    pollSCM('H/5 * * * *')
+  }
+  
   parameters {
     string(name: 'DEV_IMAGE_TAG', defaultValue: '', description: 'Tag de imagen DEV a promover (ej: dev-a1b2c3d)')
     string(name: 'VERSION', defaultValue: '1.0.0', description: 'Versión de STAGE (ej: 1.0.0)')
@@ -310,6 +316,21 @@ pipeline {
       echo "  - ${DOCKERHUB_REPO}/order-service:${STABLE_TAG}"
       echo "  - ${DOCKERHUB_REPO}/payment-service:${STABLE_TAG}"
       echo "  - ${DOCKERHUB_REPO}/shipping-service:${STABLE_TAG}"
+      echo ""
+      echo "⚠️  To deploy to PRODUCTION, manually trigger 'ecommerce-prod-pipeline'"
+      echo "   with STABLE_VERSION=${params.VERSION}"
+      
+      // OPCIONAL: Trigger automático de PROD (comentado por default debido a approval manual)
+      // Descomentar si se quiere flujo completamente automático hasta el approval
+      /*
+      echo "=== Triggering PROD pipeline (will wait for manual approval) ==="
+      build job: 'ecommerce-prod-pipeline',
+            wait: false,
+            parameters: [
+              string(name: 'STABLE_VERSION', value: "${params.VERSION}"),
+              booleanParam(name: 'SKIP_APPROVAL', value: false)
+            ]
+      */
     }
     failure {
       echo "❌ STAGE Pipeline failed!"
