@@ -80,7 +80,11 @@ pipeline {
           steps {
             container('maven') {
               dir('order-service') {
-                sh 'mvn -B -U clean test -Dsurefire.excludes="**/*IntegrationTest.java" -DfailIfNoTests=false'
+                sh '''
+                  mvn -B -U clean test \
+                    -Dtest=OrderServiceApplicationTests,OrderServiceImplTest \
+                    -DfailIfNoTests=false
+                '''
               }
             }
           }
@@ -94,7 +98,7 @@ pipeline {
           steps {
             container('maven') {
               dir('payment-service') {
-                sh 'mvn -B -U clean test -Dsurefire.excludes="**/*IntegrationTest.java" -DfailIfNoTests=false'
+                sh 'mvn -B -U clean test -DfailIfNoTests=false'
               }
             }
           }
@@ -108,7 +112,7 @@ pipeline {
           steps {
             container('maven') {
               dir('shipping-service') {
-                sh 'mvn -B -U clean test -Dsurefire.excludes="**/*IntegrationTest.java" -DfailIfNoTests=false'
+                sh 'mvn -B -U clean test -DfailIfNoTests=false'
               }
             }
           }
