@@ -162,42 +162,37 @@ pipeline {
         stage('order-service') {
           steps {
             container('docker') {
-              dir('order-service') {
-                sh '''
-                  echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin
-                  docker build -t ${DOCKERHUB_REPO}/order-service:${IMAGE_TAG} .
-                  docker push ${DOCKERHUB_REPO}/order-service:${IMAGE_TAG}
-                  docker logout
-                '''
-              }
+              // Build from repository root so parent POM and multi-module layout are available
+              sh '''
+                echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin
+                docker build -f order-service/Dockerfile -t ${DOCKERHUB_REPO}/order-service:${IMAGE_TAG} .
+                docker push ${DOCKERHUB_REPO}/order-service:${IMAGE_TAG}
+                docker logout
+              '''
             }
           }
         }
         stage('payment-service') {
           steps {
             container('docker') {
-              dir('payment-service') {
-                sh '''
-                  echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin
-                  docker build -t ${DOCKERHUB_REPO}/payment-service:${IMAGE_TAG} .
-                  docker push ${DOCKERHUB_REPO}/payment-service:${IMAGE_TAG}
-                  docker logout
-                '''
-              }
+              sh '''
+                echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin
+                docker build -f payment-service/Dockerfile -t ${DOCKERHUB_REPO}/payment-service:${IMAGE_TAG} .
+                docker push ${DOCKERHUB_REPO}/payment-service:${IMAGE_TAG}
+                docker logout
+              '''
             }
           }
         }
         stage('shipping-service') {
           steps {
             container('docker') {
-              dir('shipping-service') {
-                sh '''
-                  echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin
-                  docker build -t ${DOCKERHUB_REPO}/shipping-service:${IMAGE_TAG} .
-                  docker push ${DOCKERHUB_REPO}/shipping-service:${IMAGE_TAG}
-                  docker logout
-                '''
-              }
+              sh '''
+                echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin
+                docker build -f shipping-service/Dockerfile -t ${DOCKERHUB_REPO}/shipping-service:${IMAGE_TAG} .
+                docker push ${DOCKERHUB_REPO}/shipping-service:${IMAGE_TAG}
+                docker logout
+              '''
             }
           }
         }
