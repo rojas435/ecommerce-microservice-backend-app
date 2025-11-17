@@ -31,7 +31,7 @@ variable "aks_subnet_address_prefix" {
 variable "acr_name" {
   description = "Name of Azure Container Registry"
   type        = string
-  default     = "ecommercestageacr"
+  default     = "ecommercerojas435stage"
 }
 
 variable "acr_sku" {

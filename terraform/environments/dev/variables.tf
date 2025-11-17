@@ -33,7 +33,7 @@ variable "aks_subnet_address_prefix" {
 variable "acr_name" {
   description = "Name of Azure Container Registry (globally unique)"
   type        = string
-  default     = "ecommercedevacr" # Change this to make it unique
+  default     = "ecommercerojas435acr" # Globally unique with your username
 }
 
 variable "acr_sku" {
