@@ -43,24 +43,6 @@ module "networking" {
   }
 }
 
-module "acr" {
-  source = "../../modules/acr"
-
-  environment         = var.environment
-  location            = var.location
-  resource_group_name = azurerm_resource_group.main.name
-  registry_name       = var.acr_name
-  sku                 = var.acr_sku
-  aks_principal_id    = module.aks.principal_id
-
-  tags = {
-    Environment = var.environment
-    Project     = var.project_name
-  }
-
-  depends_on = [module.aks]
-}
-
 module "aks" {
   source = "../../modules/aks"
 
@@ -78,4 +60,22 @@ module "aks" {
   }
 
   depends_on = [module.networking]
+}
+
+module "acr" {
+  source = "../../modules/acr"
+
+  environment         = var.environment
+  location            = var.location
+  resource_group_name = azurerm_resource_group.main.name
+  registry_name       = var.acr_name
+  sku                 = var.acr_sku
+  aks_principal_id    = module.aks.principal_id
+
+  tags = {
+    Environment = var.environment
+    Project     = var.project_name
+  }
+
+  depends_on = [module.aks]
 }
