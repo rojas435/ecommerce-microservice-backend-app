@@ -45,6 +45,8 @@ class OrderProductStockValidationIntegrationTest {
     @MockBean
     private RestTemplate restTemplate;
 
+    private Integer savedOrderId;
+
     @BeforeEach
     void setUp() {
         // Clean up database before each test
@@ -53,14 +55,14 @@ class OrderProductStockValidationIntegrationTest {
         // Reset mock behavior
         reset(restTemplate);
 
-        // Insert test order data
+        // Insert test order data (let DB generate ID)
         Order testOrder = Order.builder()
-                .orderId(1)
                 .orderDate(LocalDateTime.now())
                 .orderDesc("Test Order")
                 .orderFee(100.0)
                 .build();
-        orderRepository.save(testOrder);
+        Order saved = orderRepository.saveAndFlush(testOrder);
+        savedOrderId = saved.getOrderId();
     }
 
     /**
@@ -90,11 +92,11 @@ class OrderProductStockValidationIntegrationTest {
                 .thenReturn(mockProduct);
 
         // When: We retrieve the order by ID
-        OrderDto result = orderService.findById(1);
+        OrderDto result = orderService.findById(savedOrderId);
 
         // Then: Order should be retrieved successfully
         assertThat(result).isNotNull();
-        assertThat(result.getOrderId()).isEqualTo(1);
+        assertThat(result.getOrderId()).isEqualTo(savedOrderId);
         
         // NOTE: The following verification will FAIL because current implementation
         // doesn't call PRODUCT-SERVICE. This test documents the EXPECTED behavior.
@@ -149,12 +151,12 @@ class OrderProductStockValidationIntegrationTest {
         // Note: This test expects the current behavior (no exception since no call is made)
         // After implementing PRODUCT-SERVICE integration, update this test to verify
         // either graceful degradation or proper exception handling
-        OrderDto result = orderService.findById(1);
+        OrderDto result = orderService.findById(savedOrderId);
 
         // Then: Order should still be retrievable (graceful degradation)
         // OR: Should throw meaningful exception (depending on business requirements)
         assertThat(result).isNotNull();
-        assertThat(result.getOrderId()).isEqualTo(1);
+        assertThat(result.getOrderId()).isEqualTo(savedOrderId);
     }
 
     /**
@@ -168,7 +170,7 @@ class OrderProductStockValidationIntegrationTest {
     void testUpdate_DoesNotCallProductService() {
         // Given: An existing order with modified data
         OrderDto updateDto = OrderDto.builder()
-                .orderId(1)
+                .orderId(savedOrderId)
                 .orderDate(LocalDateTime.now())
                 .orderDesc("Updated Order Description")
                 .orderFee(150.0)
@@ -196,13 +198,11 @@ class OrderProductStockValidationIntegrationTest {
     void testFindAll_RetrievesOrdersEfficientlyWithoutNPlusOne() {
         // Given: Multiple orders in database
         Order order2 = Order.builder()
-                .orderId(2)
                 .orderDate(LocalDateTime.now())
                 .orderDesc("Second Order")
                 .orderFee(75.0)
                 .build();
         Order order3 = Order.builder()
-                .orderId(3)
                 .orderDate(LocalDateTime.now())
                 .orderDesc("Third Order")
                 .orderFee(125.0)
