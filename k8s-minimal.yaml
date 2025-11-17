@@ -1,0 +1,189 @@
+# Despliegue mínimo de microservicios para cluster pequeño (2 vCPUs)
+# Solo 4 servicios críticos con recursos mínimos
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ecommerce-minimal
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+  namespace: ecommerce-minimal
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api-gateway
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+    spec:
+      containers:
+      - name: api-gateway
+        image: ecommercerojas435acr.azurecr.io/api-gateway:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "docker"
+        resources:
+          requests:
+            cpu: "150m"
+            memory: "300Mi"
+          limits:
+            cpu: "300m"
+            memory: "600Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway
+  namespace: ecommerce-minimal
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 8080
+    targetPort: 8080
+  selector:
+    app: api-gateway
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-service
+  namespace: ecommerce-minimal
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: order-service
+  template:
+    metadata:
+      labels:
+        app: order-service
+    spec:
+      containers:
+      - name: order-service
+        image: ecommercerojas435acr.azurecr.io/order-service:latest
+        ports:
+        - containerPort: 8300
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "docker"
+        - name: SPRING_CLOUD_DISCOVERY_ENABLED
+          value: "false"
+        resources:
+          requests:
+            cpu: "120m"
+            memory: "250Mi"
+          limits:
+            cpu: "250m"
+            memory: "500Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: order-service
+  namespace: ecommerce-minimal
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8300
+    targetPort: 8300
+  selector:
+    app: order-service
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: product-service
+  namespace: ecommerce-minimal
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: product-service
+  template:
+    metadata:
+      labels:
+        app: product-service
+    spec:
+      containers:
+      - name: product-service
+        image: ecommercerojas435acr.azurecr.io/product-service:latest
+        ports:
+        - containerPort: 8500
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "docker"
+        - name: SPRING_CLOUD_DISCOVERY_ENABLED
+          value: "false"
+        resources:
+          requests:
+            cpu: "120m"
+            memory: "250Mi"
+          limits:
+            cpu: "250m"
+            memory: "500Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: product-service
+  namespace: ecommerce-minimal
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8500
+    targetPort: 8500
+  selector:
+    app: product-service
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-service
+  namespace: ecommerce-minimal
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: user-service
+  template:
+    metadata:
+      labels:
+        app: user-service
+    spec:
+      containers:
+      - name: user-service
+        image: ecommercerojas435acr.azurecr.io/user-service:latest
+        ports:
+        - containerPort: 8700
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "docker"
+        - name: SPRING_CLOUD_DISCOVERY_ENABLED
+          value: "false"
+        resources:
+          requests:
+            cpu: "120m"
+            memory: "250Mi"
+          limits:
+            cpu: "250m"
+            memory: "500Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-service
+  namespace: ecommerce-minimal
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8700
+    targetPort: 8700
+  selector:
+    app: user-service
