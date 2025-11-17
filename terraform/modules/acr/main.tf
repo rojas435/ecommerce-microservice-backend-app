@@ -17,9 +17,6 @@ resource "azurerm_container_registry" "main" {
   )
 }
 
-# Role assignment for AKS to pull images from ACR
-resource "azurerm_role_assignment" "aks_acr" {
-  principal_id         = var.aks_principal_id
-  role_definition_name = "AcrPull"
-  scope                = azurerm_container_registry.main.id
-}
+# Note: Role assignment must be done manually or by service principal with User Access Administrator role
+# Run this after deployment:
+# az aks update --resource-group <rg-name> --name <cluster-name> --attach-acr <acr-name>

@@ -32,11 +32,6 @@ variable "sku" {
   }
 }
 
-variable "aks_principal_id" {
-  description = "Principal ID of the AKS cluster for ACR pull permissions"
-  type        = string
-}
-
 variable "tags" {
   description = "Tags to apply to resources"
   type        = map(string)

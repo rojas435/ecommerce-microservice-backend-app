@@ -85,7 +85,6 @@ module "acr" {
   resource_group_name = azurerm_resource_group.main.name
   registry_name       = var.acr_name
   sku                 = var.acr_sku
-  aks_principal_id    = module.aks.principal_id
 
   tags = {
     Environment = var.environment
