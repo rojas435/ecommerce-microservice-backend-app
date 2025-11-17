@@ -1,0 +1,80 @@
+# Production Environment Configuration
+# 2 nodes for HA, Standard ACR for performance
+
+terraform {
+  required_version = ">= 1.5"
+  
+  required_providers {
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~> 3.80"
+    }
+  }
+}
+
+provider "azurerm" {
+  features {}
+}
+
+resource "azurerm_resource_group" "main" {
+  name     = "${var.project_name}-${var.environment}-rg"
+  location = var.location
+
+  tags = {
+    Environment = var.environment
+    Project     = var.project_name
+    ManagedBy   = "Terraform"
+  }
+}
+
+module "networking" {
+  source = "../../modules/networking"
+
+  environment         = var.environment
+  location            = var.location
+  resource_group_name = azurerm_resource_group.main.name
+  vnet_address_space  = var.vnet_address_space
+  aks_subnet_address_prefix = var.aks_subnet_address_prefix
+
+  tags = {
+    Environment = var.environment
+    Project     = var.project_name
+  }
+}
+
+module "acr" {
+  source = "../../modules/acr"
+
+  environment         = var.environment
+  location            = var.location
+  resource_group_name = azurerm_resource_group.main.name
+  registry_name       = var.acr_name
+  sku                 = var.acr_sku
+  aks_principal_id    = module.aks.principal_id
+
+  tags = {
+    Environment = var.environment
+    Project     = var.project_name
+  }
+
+  depends_on = [module.aks]
+}
+
+module "aks" {
+  source = "../../modules/aks"
+
+  environment         = var.environment
+  location            = var.location
+  resource_group_name = azurerm_resource_group.main.name
+  subnet_id           = module.networking.aks_subnet_id
+  kubernetes_version  = var.kubernetes_version
+  node_count          = var.aks_node_count
+  vm_size             = var.aks_vm_size
+
+  tags = {
+    Environment = var.environment
+    Project     = var.project_name
+  }
+
+  depends_on = [module.networking]
+}
