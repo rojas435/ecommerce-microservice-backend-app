@@ -35,7 +35,6 @@ variable "sku" {
 variable "aks_principal_id" {
   description = "Principal ID of the AKS cluster for ACR pull permissions"
   type        = string
-  default     = ""
 }
 
 variable "tags" {
