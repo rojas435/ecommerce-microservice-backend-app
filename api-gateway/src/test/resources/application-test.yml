@@ -1,0 +1,35 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: API-GATEWAY
+  profiles:
+    active: test
+  
+  # Disable config server for tests
+  cloud:
+    config:
+      enabled: false
+    gateway:
+      enabled: true
+      discovery:
+        locator:
+          enabled: false
+  
+  # Disable Zipkin for tests
+  zipkin:
+    enabled: false
+  sleuth:
+    enabled: false
+
+# Disable Eureka for tests
+eureka:
+  client:
+    enabled: false
+    register-with-eureka: false
+    fetch-registry: false
+
+management:
+  endpoints:
+    enabled-by-default: false
