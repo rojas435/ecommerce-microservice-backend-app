@@ -4,8 +4,6 @@ server:
 spring:
   application:
     name: API-GATEWAY
-  profiles:
-    active: test
   
   # Disable config server for tests
   cloud:

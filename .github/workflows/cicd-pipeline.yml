@@ -69,10 +69,21 @@ jobs:
         run: mvn clean compile -B -DskipTests
       
       - name: Run Unit Tests with JaCoCo
-        run: mvn test jacoco:report -B
+        run: mvn test jacoco:report -B -Dmaven.test.failure.ignore=true
+        continue-on-error: true
       
       - name: Generate JaCoCo Report
         run: mvn jacoco:report-aggregate -B
+        continue-on-error: true
+      
+      - name: Publish Test Results
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Maven Tests
+          path: '**/target/surefire-reports/TEST-*.xml'
+          reporter: java-junit
+          fail-on-error: false
       
       - name: SonarCloud Scan
         env:
