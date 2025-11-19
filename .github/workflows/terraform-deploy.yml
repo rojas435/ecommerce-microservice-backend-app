@@ -61,6 +61,8 @@ jobs:
         continue-on-error: true
 
       - name: Terraform Init
+        env:
+          ARM_ACCESS_KEY: ${{ secrets.TERRAFORM_BACKEND_KEY }}
         run: terraform init
 
       - name: Terraform Validate
@@ -119,6 +121,8 @@ jobs:
           terraform_version: ${{ env.TF_VERSION }}
 
       - name: Terraform Init
+        env:
+          ARM_ACCESS_KEY: ${{ secrets.TERRAFORM_BACKEND_KEY }}
         run: terraform init
 
       - name: Download Plan
@@ -165,6 +169,8 @@ jobs:
           terraform_version: ${{ env.TF_VERSION }}
 
       - name: Terraform Init
+        env:
+          ARM_ACCESS_KEY: ${{ secrets.TERRAFORM_BACKEND_KEY }}
         run: terraform init
 
       - name: Terraform Plan
