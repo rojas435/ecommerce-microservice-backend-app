@@ -30,6 +30,9 @@ resource "azurerm_kubernetes_cluster" "main" {
     type = "SystemAssigned"
   }
 
+  # OIDC issuer must remain enabled (cannot be disabled once activated)
+  oidc_issuer_enabled = true
+
   network_profile {
     network_plugin    = "azure"
     network_policy    = "azure"
