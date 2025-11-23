@@ -162,6 +162,8 @@ jobs:
         if: github.ref == 'refs/heads/master' && github.event_name == 'push'
         env:
           SEMVER: ${{ steps.setversion.outputs.semver }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if git tag -l | grep -q "v$SEMVER"; then
             echo "Tag v$SEMVER already exists, skipping"
@@ -173,9 +175,6 @@ jobs:
           fi
           echo "Creating GitHub Release for v$SEMVER"
           gh release create v$SEMVER --generate-notes || echo "Release already exists"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # Stage 2: Security Scanning
   security-scan:
