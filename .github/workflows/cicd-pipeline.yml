@@ -144,18 +144,17 @@ jobs:
           configFilePath: .github/gitversion.yml
         continue-on-error: true
 
-      - name: Fallback Version if GitVersion failed
-        if: failure()
-        run: echo "SEMVER=$(date +%Y.%m.%d).${{ github.run_number }}" >> $GITHUB_ENV
-
-      - name: Set Version Output
+      - name: Set Version Output (with robust fallback)
         id: setversion
         run: |
-          if [ -z "${{ steps.gitversion.outputs.semver }}" ]; then
-            echo "Using fallback version $SEMVER"
-            echo "semver=$SEMVER" >> $GITHUB_OUTPUT
+          GIT_SEMVER='${{ steps.gitversion.outputs.semver }}'
+          if [ -z "$GIT_SEMVER" ]; then
+            DATE_PART=$(date +%Y.%m.%d)
+            FALLBACK="${DATE_PART}.${{ github.run_number }}"
+            echo "GitVersion empty; using fallback $FALLBACK"
+            echo "semver=$FALLBACK" >> $GITHUB_OUTPUT
           else
-            echo "semver=${{ steps.gitversion.outputs.semver }}" >> $GITHUB_OUTPUT
+            echo "semver=$GIT_SEMVER" >> $GITHUB_OUTPUT
           fi
 
       - name: Create Tag & Release (master push only)
@@ -428,17 +427,24 @@ jobs:
           echo "Docker: ${{ needs.build-docker-images.result }}"
           echo "Deploy Dev/Stage: ${{ needs.deploy-to-aks.result }}"
           echo "Deploy Prod: ${{ needs.deploy-to-prod.result }}"
-      - name: Slack Failure Notification
-        if: steps.check.outputs.status == 'failure' && env.SLACK_WEBHOOK_URL != ''
+      - name: Slack Notification
+        if: env.SLACK_WEBHOOK_URL != ''
         uses: rtCamp/action-slack-notify@v2
         env:
           SLACK_WEBHOOK_URL: ${{ env.SLACK_WEBHOOK_URL }}
-          SLACK_COLOR: '#ff0000'
+          SLACK_COLOR: ${{ steps.check.outputs.status == 'failure' && '#ff0000' || '#36a64f' }}
           SLACK_MESSAGE: |
-            CI/CD FAILED
+            CI/CD ${{ steps.check.outputs.status == 'failure' && 'FAILED' || 'SUCCESS' }}
+            Version: ${{ needs.semantic-version.outputs.version }}
             Repo: ${{ github.repository }}
+            Branch: ${{ github.ref_name }}
+            Commit: ${{ github.sha }}
             Run ID: ${{ github.run_id }}
-            Build: ${{ needs.build-and-test.result }} | Security: ${{ needs.security-scan.result }} | Docker: ${{ needs.build-docker-images.result }} | Dev/Stage Deploy: ${{ needs.deploy-to-aks.result }} | Prod Deploy: ${{ needs.deploy-to-prod.result }}
+            Build: ${{ needs.build-and-test.result }}
+            Security: ${{ needs.security-scan.result }}
+            Docker: ${{ needs.build-docker-images.result }}
+            Dev/Stage Deploy: ${{ needs.deploy-to-aks.result }}
+            Prod Deploy: ${{ needs.deploy-to-prod.result }}
       - name: Create Issue on Failure
         if: steps.check.outputs.status == 'failure'
         uses: actions/github-script@v7
