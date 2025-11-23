@@ -426,7 +426,7 @@ jobs:
           echo "Deploy Dev/Stage: ${{ needs.deploy-to-aks.result }}"
           echo "Deploy Prod: ${{ needs.deploy-to-prod.result }}"
       - name: Slack Failure Notification
-        if: steps.check.outputs.status == 'failure' && secrets.SLACK_WEBHOOK_URL != ''
+        if: ${{ steps.check.outputs.status == 'failure' && secrets.SLACK_WEBHOOK_URL != '' }}
         uses: rtCamp/action-slack-notify@v2
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
