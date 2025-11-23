@@ -1,5 +1,6 @@
 package com.selimhorri.app.constant;
 
+// Comentario de prueba
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 
