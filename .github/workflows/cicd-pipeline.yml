@@ -157,6 +157,33 @@ jobs:
             echo "semver=$GIT_SEMVER" >> $GITHUB_OUTPUT
           fi
 
+      - name: Generate Release Notes (master only)
+        if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+        run: |
+          SEMVER='${{ steps.setversion.outputs.semver }}'
+          PREV_TAG=$(git tag --sort=-creatordate | grep '^v' | grep -v "v$SEMVER" | head -n1 || true)
+          echo "Previous tag: ${PREV_TAG:-<none>}"
+          if [ -z "$PREV_TAG" ]; then RANGE="--max-count=100"; else RANGE="$PREV_TAG..HEAD"; fi
+          echo "# Release v$SEMVER" > RELEASE_NOTES.md
+          echo "Fecha: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> RELEASE_NOTES.md
+          echo "" >> RELEASE_NOTES.md
+          echo "## Resumen" >> RELEASE_NOTES.md
+          echo "Cambios desde ${PREV_TAG:-inicio del repositorio}." >> RELEASE_NOTES.md
+          echo "" >> RELEASE_NOTES.md
+          echo "## Commits" >> RELEASE_NOTES.md
+          git log $RANGE --pretty=format:'- %h %s (%an)' --no-merges >> RELEASE_NOTES.md || echo "(Sin commits detectados)" >> RELEASE_NOTES.md
+          echo "" >> RELEASE_NOTES.md
+          echo "## Rollback" >> RELEASE_NOTES.md
+          echo "Para rollback usar imágenes versionadas v$SEMVER-1 o comando 'kubectl rollout undo'." >> RELEASE_NOTES.md
+          cat RELEASE_NOTES.md
+
+      - name: Upload Release Notes artifact
+        if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: RELEASE_NOTES.md
+
       - name: Create Tag & Release (master push only)
         if: github.ref == 'refs/heads/master' && github.event_name == 'push'
         env:
@@ -172,8 +199,13 @@ jobs:
             git tag v$SEMVER
             git push origin v$SEMVER
           fi
-          echo "Creating GitHub Release for v$SEMVER"
-          gh release create v$SEMVER --generate-notes || echo "Release already exists"
+          echo "Creating GitHub Release for v$SEMVER with notes file"
+          if [ -f RELEASE_NOTES.md ]; then
+            gh release create v$SEMVER --notes-file RELEASE_NOTES.md || echo "Release already exists"
+          else
+            echo "RELEASE_NOTES.md missing, falling back to auto notes"
+            gh release create v$SEMVER --generate-notes || echo "Release already exists"
+          fi
 
   # Stage 2: Security Scanning
   security-scan:
