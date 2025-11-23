@@ -403,6 +403,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build-and-test, semantic-version, security-scan, build-docker-images, deploy-to-aks, deploy-to-prod]
     if: always()
+    env:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
     
     steps:
       - name: Check job status
@@ -426,10 +428,10 @@ jobs:
           echo "Deploy Dev/Stage: ${{ needs.deploy-to-aks.result }}"
           echo "Deploy Prod: ${{ needs.deploy-to-prod.result }}"
       - name: Slack Failure Notification
-        if: ${{ steps.check.outputs.status == 'failure' && secrets.SLACK_WEBHOOK_URL != '' }}
+        if: steps.check.outputs.status == 'failure' && env.SLACK_WEBHOOK_URL != ''
         uses: rtCamp/action-slack-notify@v2
         env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_URL: ${{ env.SLACK_WEBHOOK_URL }}
           SLACK_COLOR: '#ff0000'
           SLACK_MESSAGE: |
             CI/CD FAILED
