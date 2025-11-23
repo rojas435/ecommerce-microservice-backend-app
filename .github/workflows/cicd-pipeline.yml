@@ -398,6 +398,7 @@ jobs:
           curl -f http://$API_GATEWAY_IP:8080/actuator/health || echo "Health check failed"
 
   # Stage 5: Notification
+  # Test commit
   notify:
     name: Send Notifications
     runs-on: ubuntu-latest
