@@ -1,0 +1,22 @@
+mode: Mainline
+branches:
+  master:
+    regex: master
+    tag: ''
+    increment: patch
+  develop:
+    regex: develop
+    tag: 'alpha'
+    increment: minor
+  feature:
+    regex: feature[/-]
+    tag: 'beta'
+    increment: patch
+  hotfix:
+    regex: hotfix[/-]
+    tag: ''
+    increment: patch
+ignore:
+  sha: []
+commit-message-incrementing: Enabled
+merge-message-strategy: MergeMessage
