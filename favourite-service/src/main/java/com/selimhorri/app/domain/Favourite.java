@@ -25,6 +25,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
+// Test Comment
 
 @Entity
 @Table(name = "favourites")
