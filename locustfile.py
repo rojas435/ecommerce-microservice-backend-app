@@ -29,11 +29,71 @@ from locust import HttpUser, task, between, SequentialTaskSet
 import os
 import random
 import json
+import threading
 from datetime import datetime
 
 # Allow switching between legacy service-prefixed routes (/order-service/...) and
 # the api-only routes (/api/orders) used by the docker profile.
 ROUTING_MODE = os.getenv("LOCUST_ROUTING_MODE", "service-prefix").strip().lower()
+PRODUCT_CACHE_LOCK = threading.Lock()
+PRODUCT_ID_CACHE: list[int] = []
+
+
+def format_app_datetime() -> str:
+    """Match the dd-MM-yyyy__HH:mm:ss:SSSSSS format expected by the services."""
+    return datetime.now().strftime("%d-%m-%Y__%H:%M:%S:%f")
+
+
+def update_product_cache(products: list[dict]) -> None:
+    """Store any product ids returned by the API for later reuse."""
+    ids = []
+    for product in products or []:
+        product_id = product.get("productId")
+        if product_id is None:
+            continue
+        try:
+            ids.append(int(product_id))
+        except (TypeError, ValueError):
+            continue
+    if ids:
+        with PRODUCT_CACHE_LOCK:
+            # Keep most recent snapshot to avoid stale IDs that cause 400s
+            global PRODUCT_ID_CACHE
+            PRODUCT_ID_CACHE = ids
+
+
+def get_cached_product_id() -> int | None:
+    with PRODUCT_CACHE_LOCK:
+        if PRODUCT_ID_CACHE:
+            return random.choice(PRODUCT_ID_CACHE)
+    return None
+
+
+def ensure_product_cache(client) -> None:
+    """Prime the product cache if it is empty."""
+    if get_cached_product_id() is not None:
+        return
+    with client.get(
+        build_path("product-service", "api/products"),
+        name="[Cache] Fetch Products",
+        catch_response=True,
+    ) as response:
+        if response.status_code == 200:
+            try:
+                update_product_cache(response.json())
+                response.success()
+            except json.JSONDecodeError:
+                response.failure("Invalid JSON while caching products")
+        else:
+            response.failure(f"Failed to cache products (status {response.status_code})")
+
+
+def pick_existing_product_id(client) -> int:
+    ensure_product_cache(client)
+    cached = get_cached_product_id()
+    if cached is not None:
+        return cached
+    return random.randint(1, 10)
 
 
 def build_path(service_segment: str, endpoint: str) -> str:
@@ -76,8 +136,13 @@ class EcommerceUserBehavior(SequentialTaskSet):
                 try:
                     products = response.json()
                     if products and len(products) > 0:
+                        update_product_cache(products)
                         # Store random product ID for next tasks
-                        self.product_id = products[random.randint(0, min(len(products)-1, 10))].get('productId', 1)
+                        raw_id = products[random.randint(0, min(len(products)-1, 10))].get('productId', 1)
+                        try:
+                            self.product_id = int(raw_id)
+                        except (TypeError, ValueError):
+                            self.product_id = 1
                         response.success()
                     else:
                         response.failure("No products returned")
@@ -94,7 +159,7 @@ class EcommerceUserBehavior(SequentialTaskSet):
         Expected: < 200ms response time
         """
         if not self.product_id:
-            self.product_id = random.randint(1, 10)
+            self.product_id = pick_existing_product_id(self.client)
         
         with self.client.get(
             f"{build_path('product-service', 'api/products')}/{self.product_id}",
@@ -125,12 +190,12 @@ class EcommerceUserBehavior(SequentialTaskSet):
         Expected: < 300ms response time
         """
         if not self.product_id:
-            self.product_id = random.randint(1, 10)
+            self.product_id = pick_existing_product_id(self.client)
         
         payload = {
             "userId": self.user_id,
             "productId": self.product_id,
-            "likeDate": datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+            "likeDate": format_app_datetime()
         }
         
         with self.client.post(
@@ -155,10 +220,10 @@ class EcommerceUserBehavior(SequentialTaskSet):
         Expected: < 500ms response time (writes are slower)
         """
         if not self.product_id:
-            self.product_id = random.randint(1, 10)
+            self.product_id = pick_existing_product_id(self.client)
         
         payload = {
-            "orderDate": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+            "orderDate": format_app_datetime(),
             "orderDesc": f"Performance test order {random.randint(1000, 9999)}",
             "orderFee": round(random.uniform(10.0, 500.0), 2),
             "userId": self.user_id
@@ -214,12 +279,25 @@ class ReadHeavyUser(HttpUser):
     @task(10)  # 10x more likely than other tasks
     def browse_products(self):
         """Browse products list"""
-        self.client.get(build_path("product-service", "api/products"), name="[Read] Browse Products")
+        with self.client.get(
+            build_path("product-service", "api/products"),
+            name="[Read] Browse Products",
+            catch_response=True,
+        ) as response:
+            if response.status_code == 200:
+                try:
+                    products = response.json()
+                    update_product_cache(products)
+                    response.success()
+                except json.JSONDecodeError:
+                    response.failure("Invalid JSON response")
+            else:
+                response.failure(f"Got status code {response.status_code}")
     
     @task(5)
     def view_product(self):
         """View random product details"""
-        product_id = random.randint(1, 20)
+        product_id = pick_existing_product_id(self.client)
         self.client.get(f"{build_path('product-service', 'api/products')}/{product_id}", name="[Read] View Product")
     
     @task(2)
@@ -236,37 +314,69 @@ class WriteHeavyUser(HttpUser):
     """
     wait_time = between(2, 5)  # Slower pace for write operations
     weight = 3
+    last_order_id: int | None = None
     
     @task(5)
     def create_order(self):
         """Create a new order"""
-        payload = {
-            "orderDate": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
-            "orderDesc": f"Load test order {random.randint(1000, 9999)}",
-            "orderFee": round(random.uniform(50.0, 500.0), 2),
-            "userId": random.randint(1, 10)
-        }
-        self.client.post(build_path("order-service", "api/orders"), json=payload, name="[Write] Create Order")
+        self._submit_order("[Write] Create Order")
     
     @task(3)
     def add_favourite(self):
         """Add product to favourites"""
         payload = {
             "userId": random.randint(1, 10),
-            "productId": random.randint(1, 20),
-            "likeDate": datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+            "productId": pick_existing_product_id(self.client),
+            "likeDate": format_app_datetime()
         }
         self.client.post(build_path("favourite-service", "api/favourites"), json=payload, name="[Write] Add Favourite")
     
     @task(2)
     def create_payment(self):
         """Create a payment"""
+        order_id = self.last_order_id or self._submit_order("[Write] Create Order (prefetch)")
+        if not order_id:
+            return
         payload = {
             "isPayed": True,
-            "paymentDate": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
-            "orderId": random.randint(1, 100)
+            "paymentDate": format_app_datetime(),
+            "orderId": order_id
         }
-        self.client.post(build_path("payment-service", "api/payments"), json=payload, name="[Write] Create Payment")
+        with self.client.post(
+            build_path("payment-service", "api/payments"),
+            json=payload,
+            name="[Write] Create Payment",
+            catch_response=True,
+        ) as response:
+            if response.status_code in [200, 201]:
+                response.success()
+            else:
+                response.failure(f"Got status code {response.status_code}")
+
+    def _submit_order(self, metric_name: str) -> int | None:
+        payload = {
+            "orderDate": format_app_datetime(),
+            "orderDesc": f"Load test order {random.randint(1000, 9999)}",
+            "orderFee": round(random.uniform(50.0, 500.0), 2),
+            "userId": random.randint(1, 10)
+        }
+        with self.client.post(
+            build_path("order-service", "api/orders"),
+            json=payload,
+            name=metric_name,
+            catch_response=True,
+        ) as response:
+            if response.status_code in [200, 201]:
+                try:
+                    order = response.json()
+                    self.last_order_id = order.get('orderId')
+                    response.success()
+                    return self.last_order_id
+                except json.JSONDecodeError:
+                    response.failure("Invalid JSON response")
+            else:
+                response.failure(f"Got status code {response.status_code}")
+        return None
 
 
 class RealisticUserJourney(HttpUser):
