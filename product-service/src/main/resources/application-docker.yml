@@ -1,0 +1,29 @@
+server:
+  port: 8500
+  servlet:
+    context-path: /
+
+spring:
+  cloud:
+    config:
+      enabled: false
+
+eureka:
+  client:
+    enabled: false
+    register-with-eureka: false
+    fetch-registry: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    '[com.selimhorri.app]': DEBUG
+    '[org.springframework.web]': INFO

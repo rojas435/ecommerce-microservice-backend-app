@@ -73,7 +73,7 @@ spec:
       - name: order-service
         image: ecommercerojas435acr.azurecr.io/order-service:latest
         ports:
-        - containerPort: 8080
+        - containerPort: 8300
         env:
         - name: SPRING_PROFILES_ACTIVE
           value: "docker"
@@ -95,8 +95,8 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-  - port: 8080
-    targetPort: 8080
+  - port: 8300
+    targetPort: 8300
   selector:
     app: order-service
 ---
@@ -120,7 +120,7 @@ spec:
       - name: product-service
         image: ecommercerojas435acr.azurecr.io/product-service:latest
         ports:
-        - containerPort: 8080
+        - containerPort: 8500
         env:
         - name: SPRING_PROFILES_ACTIVE
           value: "docker"
@@ -142,8 +142,8 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-  - port: 8080
-    targetPort: 8080
+  - port: 8500
+    targetPort: 8500
   selector:
     app: product-service
 ---
@@ -167,7 +167,7 @@ spec:
       - name: user-service
         image: ecommercerojas435acr.azurecr.io/user-service:latest
         ports:
-        - containerPort: 8080
+        - containerPort: 8700
         env:
         - name: SPRING_PROFILES_ACTIVE
           value: "docker"
@@ -189,8 +189,8 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-  - port: 8080
-    targetPort: 8080
+  - port: 8700
+    targetPort: 8700
   selector:
     app: user-service
 ---
@@ -214,7 +214,7 @@ spec:
       - name: payment-service
         image: ecommercerojas435acr.azurecr.io/payment-service:latest
         ports:
-        - containerPort: 8080
+        - containerPort: 8400
         env:
         - name: SPRING_PROFILES_ACTIVE
           value: "docker"
@@ -236,8 +236,8 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-  - port: 8080
-    targetPort: 8080
+  - port: 8400
+    targetPort: 8400
   selector:
     app: payment-service
 ---
@@ -261,7 +261,7 @@ spec:
       - name: shipping-service
         image: ecommercerojas435acr.azurecr.io/shipping-service:latest
         ports:
-        - containerPort: 8080
+        - containerPort: 8600
         env:
         - name: SPRING_PROFILES_ACTIVE
           value: "docker"
@@ -283,7 +283,7 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-  - port: 8080
-    targetPort: 8080
+  - port: 8600
+    targetPort: 8600
   selector:
     app: shipping-service
