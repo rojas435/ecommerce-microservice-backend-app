@@ -19,12 +19,30 @@ Usage:
     locust -f locustfile.py --host=http://api-gateway:8080 \
            --users 100 --spawn-rate 10 --run-time 3m \
            --headless --html performance-report.html
+
+Environment toggle:
+    LOCUST_ROUTING_MODE=service-prefix (default) uses /order-service/... routes
+    LOCUST_ROUTING_MODE=api-prefix    targets /api/... routes used in docker
 """
 
 from locust import HttpUser, task, between, SequentialTaskSet
+import os
 import random
 import json
 from datetime import datetime
+
+# Allow switching between legacy service-prefixed routes (/order-service/...) and
+# the api-only routes (/api/orders) used by the docker profile.
+ROUTING_MODE = os.getenv("LOCUST_ROUTING_MODE", "service-prefix").strip().lower()
+
+
+def build_path(service_segment: str, endpoint: str) -> str:
+    """Return the correct gateway path based on the routing mode."""
+    clean_endpoint = endpoint.lstrip('/')
+    if ROUTING_MODE in {"api", "api-prefix", "api_only"}:
+        return f"/{clean_endpoint}"
+    clean_service = service_segment.strip('/\')
+    return f"/{clean_service}/{clean_endpoint}"
 
 
 class EcommerceUserBehavior(SequentialTaskSet):
@@ -50,7 +68,7 @@ class EcommerceUserBehavior(SequentialTaskSet):
         Expected: < 200ms response time
         """
         with self.client.get(
-            "/product-service/api/products",
+            build_path("product-service", "api/products"),
             catch_response=True,
             name="Browse Products"
         ) as response:
@@ -79,7 +97,7 @@ class EcommerceUserBehavior(SequentialTaskSet):
             self.product_id = random.randint(1, 10)
         
         with self.client.get(
-            f"/product-service/api/products/{self.product_id}",
+            f"{build_path('product-service', 'api/products')}/{self.product_id}",
             catch_response=True,
             name="View Product Details"
         ) as response:
@@ -116,7 +134,7 @@ class EcommerceUserBehavior(SequentialTaskSet):
         }
         
         with self.client.post(
-            "/favourite-service/api/favourites",
+            build_path("favourite-service", "api/favourites"),
             json=payload,
             catch_response=True,
             name="Add to Favourites"
@@ -147,7 +165,7 @@ class EcommerceUserBehavior(SequentialTaskSet):
         }
         
         with self.client.post(
-            "/order-service/api/orders",
+            build_path("order-service", "api/orders"),
             json=payload,
             catch_response=True,
             name="Create Order"
@@ -170,7 +188,7 @@ class EcommerceUserBehavior(SequentialTaskSet):
         Expected: < 250ms response time
         """
         with self.client.get(
-            "/order-service/api/orders",
+            build_path("order-service", "api/orders"),
             catch_response=True,
             name="View Orders"
         ) as response:
@@ -196,18 +214,18 @@ class ReadHeavyUser(HttpUser):
     @task(10)  # 10x more likely than other tasks
     def browse_products(self):
         """Browse products list"""
-        self.client.get("/product-service/api/products", name="[Read] Browse Products")
+        self.client.get(build_path("product-service", "api/products"), name="[Read] Browse Products")
     
     @task(5)
     def view_product(self):
         """View random product details"""
         product_id = random.randint(1, 20)
-        self.client.get(f"/product-service/api/products/{product_id}", name="[Read] View Product")
+        self.client.get(f"{build_path('product-service', 'api/products')}/{product_id}", name="[Read] View Product")
     
     @task(2)
     def view_orders(self):
         """View user's orders"""
-        self.client.get("/order-service/api/orders", name="[Read] View Orders")
+        self.client.get(build_path("order-service", "api/orders"), name="[Read] View Orders")
 
 
 class WriteHeavyUser(HttpUser):
@@ -228,7 +246,7 @@ class WriteHeavyUser(HttpUser):
             "orderFee": round(random.uniform(50.0, 500.0), 2),
             "userId": random.randint(1, 10)
         }
-        self.client.post("/order-service/api/orders", json=payload, name="[Write] Create Order")
+        self.client.post(build_path("order-service", "api/orders"), json=payload, name="[Write] Create Order")
     
     @task(3)
     def add_favourite(self):
@@ -238,7 +256,7 @@ class WriteHeavyUser(HttpUser):
             "productId": random.randint(1, 20),
             "likeDate": datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
         }
-        self.client.post("/favourite-service/api/favourites", json=payload, name="[Write] Add Favourite")
+        self.client.post(build_path("favourite-service", "api/favourites"), json=payload, name="[Write] Add Favourite")
     
     @task(2)
     def create_payment(self):
@@ -248,7 +266,7 @@ class WriteHeavyUser(HttpUser):
             "paymentDate": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
             "orderId": random.randint(1, 100)
         }
-        self.client.post("/payment-service/api/payments", json=payload, name="[Write] Create Payment")
+        self.client.post(build_path("payment-service", "api/payments"), json=payload, name="[Write] Create Payment")
 
 
 class RealisticUserJourney(HttpUser):

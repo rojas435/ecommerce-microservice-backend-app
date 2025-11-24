@@ -448,6 +448,7 @@ jobs:
       - name: Run Locust headless test
         env:
           TARGET_HOST: http://${{ steps.gateway.outputs.api_gateway_ip }}:8080
+          LOCUST_ROUTING_MODE: api-prefix
         run: |
           mkdir -p reports/performance
           locust -f locustfile.py \
@@ -505,20 +506,27 @@ jobs:
           done
           echo "api_gateway_ip=$API_GATEWAY_IP" >> $GITHUB_OUTPUT
 
+      - name: Prepare ZAP report directory
+        run: mkdir -p reports/security
+
       - name: Run ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.14.0
         with:
           target: http://${{ steps.zap-gateway.outputs.api_gateway_ip }}:8080
-          cmd_options: '-a -d -I'
+          cmd_options: |
+            -a -d -I \
+            -r reports/security/zap_report.html \
+            -w reports/security/zap_report.md \
+            -x reports/security/zap_report.xml \
+            -J reports/security/zap_report.json \
+            -l reports/security/zap_scan.log
           allow_issue_writing: false
 
       - name: Upload ZAP artifacts
         uses: actions/upload-artifact@v4
         with:
           name: zap-scan-report
-          path: |
-            zap_report.html
-            zap_scan.log
+          path: reports/security
           if-no-files-found: warn
           retention-days: 7
 
