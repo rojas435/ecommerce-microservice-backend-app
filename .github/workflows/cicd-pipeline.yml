@@ -394,6 +394,134 @@ jobs:
           # Simple health check
           curl -f http://$API_GATEWAY_IP:8080/actuator/health || echo "Health check failed"
 
+  performance-test:
+    name: Performance Tests (Locust)
+    runs-on: ubuntu-latest
+    needs: deploy-to-aks
+    if: needs.deploy-to-aks.result == 'success'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Set AKS context
+        uses: azure/aks-set-context@v4
+        with:
+          resource-group: ${{ env.AKS_RESOURCE_GROUP }}
+          cluster-name: ${{ env.AKS_CLUSTER }}
+
+      - name: Resolve API Gateway endpoint
+        id: gateway
+        run: |
+          set -euo pipefail
+          ATTEMPTS=0
+          MAX_ATTEMPTS=30
+          until API_GATEWAY_IP=$(kubectl get svc api-gateway -n ${{ env.NAMESPACE }} -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null) && [ -n "$API_GATEWAY_IP" ]; do
+            ATTEMPTS=$((ATTEMPTS+1))
+            if [ "$ATTEMPTS" -ge "$MAX_ATTEMPTS" ]; then
+              echo "Failed to resolve API Gateway IP" >&2
+              exit 1
+            fi
+            echo "Waiting for API Gateway IP (attempt $ATTEMPTS/$MAX_ATTEMPTS)..."
+            sleep 10
+          done
+          echo "api_gateway_ip=$API_GATEWAY_IP" >> $GITHUB_OUTPUT
+
+      - name: Install Locust dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements-performance.txt ]; then
+            pip install -r requirements-performance.txt
+          else
+            pip install locust==2.17.0
+          fi
+
+      - name: Run Locust headless test
+        env:
+          TARGET_HOST: http://${{ steps.gateway.outputs.api_gateway_ip }}:8080
+        run: |
+          mkdir -p reports/performance
+          locust -f locustfile.py \
+            --host=$TARGET_HOST \
+            --users 200 \
+            --spawn-rate 20 \
+            --run-time 5m \
+            --headless \
+            --stop-timeout 60 \
+            --csv=reports/performance/locust \
+            --logfile=reports/performance/locust.log
+
+      - name: Upload Locust artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-test-report
+          path: reports/performance
+          if-no-files-found: warn
+          retention-days: 7
+
+  zap-scan:
+    name: OWASP ZAP Baseline Scan
+    runs-on: ubuntu-latest
+    needs: deploy-to-aks
+    if: needs.deploy-to-aks.result == 'success'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Set AKS context
+        uses: azure/aks-set-context@v4
+        with:
+          resource-group: ${{ env.AKS_RESOURCE_GROUP }}
+          cluster-name: ${{ env.AKS_CLUSTER }}
+
+      - name: Resolve API Gateway endpoint
+        id: zap-gateway
+        run: |
+          set -euo pipefail
+          ATTEMPTS=0
+          MAX_ATTEMPTS=30
+          until API_GATEWAY_IP=$(kubectl get svc api-gateway -n ${{ env.NAMESPACE }} -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null) && [ -n "$API_GATEWAY_IP" ]; do
+            ATTEMPTS=$((ATTEMPTS+1))
+            if [ "$ATTEMPTS" -ge "$MAX_ATTEMPTS" ]; then
+              echo "Failed to resolve API Gateway IP" >&2
+              exit 1
+            fi
+            echo "Waiting for API Gateway IP (attempt $ATTEMPTS/$MAX_ATTEMPTS)..."
+            sleep 10
+          done
+          echo "api_gateway_ip=$API_GATEWAY_IP" >> $GITHUB_OUTPUT
+
+      - name: Run ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.14.0
+        with:
+          target: http://${{ steps.zap-gateway.outputs.api_gateway_ip }}:8080
+          cmd_options: '-a -d -I'
+          allow_issue_writing: false
+
+      - name: Upload ZAP artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-scan-report
+          path: |
+            zap_report.html
+            zap_scan.log
+          if-no-files-found: warn
+          retention-days: 7
+
   # Stage 4b: Deploy Production (requires environment approval)
   deploy-to-prod:
     name: Deploy to AKS (Production)
@@ -433,7 +561,7 @@ jobs:
   notify:
     name: Send Notifications
     runs-on: ubuntu-latest
-    needs: [build-and-test, semantic-version, security-scan, build-docker-images, deploy-to-aks, deploy-to-prod]
+    needs: [build-and-test, semantic-version, security-scan, build-docker-images, deploy-to-aks, deploy-to-prod, performance-test, zap-scan]
     if: always()
     env:
       # Provide both names; action requires SLACK_WEBHOOK specifically
@@ -447,7 +575,9 @@ jobs:
           if [ "${{ needs.build-and-test.result }}" == "failure" ] || \
              [ "${{ needs.security-scan.result }}" == "failure" ] || \
              [ "${{ needs.build-docker-images.result }}" == "failure" ] || \
-             [ "${{ needs.deploy-to-aks.result }}" == "failure" ]; then
+             [ "${{ needs.deploy-to-aks.result }}" == "failure" ] || \
+             [ "${{ needs.performance-test.result }}" == "failure" ] || \
+             [ "${{ needs.zap-scan.result }}" == "failure" ]; then
             echo "status=failure" >> $GITHUB_OUTPUT
           else
             echo "status=success" >> $GITHUB_OUTPUT
@@ -461,6 +591,8 @@ jobs:
           echo "Docker: ${{ needs.build-docker-images.result }}"
           echo "Deploy Dev/Stage: ${{ needs.deploy-to-aks.result }}"
           echo "Deploy Prod: ${{ needs.deploy-to-prod.result }}"
+          echo "Performance: ${{ needs.performance-test.result }}"
+          echo "ZAP Scan: ${{ needs.zap-scan.result }}"
       - name: Check Slack secret presence
         run: |
           if [ -z "$SLACK_WEBHOOK" ]; then
@@ -486,6 +618,8 @@ jobs:
             Docker: ${{ needs.build-docker-images.result }}
             Dev/Stage Deploy: ${{ needs.deploy-to-aks.result }}
             Prod Deploy: ${{ needs.deploy-to-prod.result }}
+            Performance: ${{ needs.performance-test.result }}
+            ZAP Scan: ${{ needs.zap-scan.result }}
       - name: Create Issue on Failure
         if: steps.check.outputs.status == 'failure'
         uses: actions/github-script@v7
