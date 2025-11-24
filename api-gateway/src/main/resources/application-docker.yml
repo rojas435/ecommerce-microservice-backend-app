@@ -1,0 +1,70 @@
+server:
+  port: 8080
+
+spring:
+  cloud:
+    gateway:
+      routes:
+      - id: ORDER-SERVICE
+        uri: http://order-service:8300
+        predicates:
+        - Path=/api/orders/**
+      - id: PAYMENT-SERVICE
+        uri: http://payment-service:8400
+        predicates:
+        - Path=/api/payments/**
+      - id: PRODUCT-SERVICE
+        uri: http://product-service:8500
+        predicates:
+        - Path=/api/products/**
+      - id: SHIPPING-SERVICE
+        uri: http://shipping-service:8600
+        predicates:
+        - Path=/api/shipments/**
+      - id: USER-SERVICE
+        uri: http://user-service:8700
+        predicates:
+        - Path=/api/users/**
+      - id: FAVOURITE-SERVICE
+        uri: http://favourite-service:8800
+        predicates:
+        - Path=/api/favourites/**
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin, RETAIN_UNIQUE
+      globalcors:
+        add-to-simple-url-handler-mapping: true
+        cors-configurations:
+          '[/**]':
+            allowedOriginPatterns: "*"
+            allowed-headers: "*"
+            exposed-headers: "*"
+            allow-credentials: true
+            allowed-methods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - PATCH
+              - OPTIONS
+    config:
+      enabled: false
+
+eureka:
+  client:
+    enabled: false
+    register-with-eureka: false
+    fetch-registry: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    org.springframework.cloud.gateway: DEBUG
+    reactor.netty: INFO
