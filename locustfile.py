@@ -41,7 +41,7 @@ def build_path(service_segment: str, endpoint: str) -> str:
     clean_endpoint = endpoint.lstrip('/')
     if ROUTING_MODE in {"api", "api-prefix", "api_only"}:
         return f"/{clean_endpoint}"
-    clean_service = service_segment.strip('/\')
+    clean_service = service_segment.strip('/\\')
     return f"/{clean_service}/{clean_endpoint}"
 
 

@@ -221,6 +221,14 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: maven-artifacts
+
+      - name: Cache Dependency-Check database
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository/org/owasp/dependency-check-data
+          key: ${{ runner.os }}-dependency-check-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-dependency-check-
       
       - name: Run Trivy vulnerability scanner (filesystem)
         uses: aquasecurity/trivy-action@master
@@ -236,10 +244,20 @@ jobs:
           sarif_file: 'trivy-fs-results.sarif'
       
       - name: Run OWASP Dependency Check
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         run: |
+          EXTRA_OPTS=""
+          if [ -n "$NVD_API_KEY" ]; then
+            echo "Using provided NVD API key to speed up feeds"
+            EXTRA_OPTS="-Dnvd.api.key=$NVD_API_KEY"
+          else
+            echo "NVD_API_KEY secret not set; update downloads will be slower"
+          fi
           mvn org.owasp:dependency-check-maven:check \
             -DfailBuildOnCVSS=7 \
-            -DsuppressionFile=dependency-check-suppressions.xml || true
+            -DsuppressionFile=dependency-check-suppressions.xml \
+            $EXTRA_OPTS || true
       
       - name: Upload OWASP Report
         uses: actions/upload-artifact@v4
@@ -506,21 +524,29 @@ jobs:
           done
           echo "api_gateway_ip=$API_GATEWAY_IP" >> $GITHUB_OUTPUT
 
-      - name: Prepare ZAP report directory
-        run: mkdir -p reports/security
-
       - name: Run ZAP Baseline Scan
+        id: zap-baseline
         uses: zaproxy/action-baseline@v0.14.0
         with:
           target: http://${{ steps.zap-gateway.outputs.api_gateway_ip }}:8080
-          cmd_options: |
-            -a -d -I \
-            -r reports/security/zap_report.html \
-            -w reports/security/zap_report.md \
-            -x reports/security/zap_report.xml \
-            -J reports/security/zap_report.json \
-            -l reports/security/zap_scan.log
+          cmd_options: '-a -d -I'
           allow_issue_writing: false
+
+      - name: Collect ZAP artifacts
+        run: |
+          mkdir -p reports/security
+          tmpfile=$(mktemp)
+          find . -maxdepth 3 -type f \( -name 'zap*.html' -o -name 'zap*.md' -o -name 'zap*.json' -o -name 'zap*.xml' -o -name 'zap*.log' -o -name 'report_html' -o -name 'report_json' -o -name 'report_md' -o -name 'report_xml' \) -print0 > "$tmpfile"
+          if [ ! -s "$tmpfile" ]; then
+            echo "No ZAP report files found to collect."
+          else
+            while IFS= read -r -d '' file; do
+              echo "Collecting $file"
+              cp "$file" reports/security/
+            done < "$tmpfile"
+            ls -al reports/security
+          fi
+          rm -f "$tmpfile"
 
       - name: Upload ZAP artifacts
         uses: actions/upload-artifact@v4
