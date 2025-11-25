@@ -149,7 +149,7 @@ def pick_existing_user_id(client) -> int:
 def create_cart_for_user(client, user_id: int) -> int | None:
     payload = {"userId": user_id}
     with client.post(
-        build_path("order-service", "api/carts"),
+        build_path("order-service", "api/carts", force_service_prefix=True),
         json=payload,
         name="[Write] Create Cart",
         catch_response=True,
@@ -169,10 +169,10 @@ def create_cart_for_user(client, user_id: int) -> int | None:
     return None
 
 
-def build_path(service_segment: str, endpoint: str) -> str:
+def build_path(service_segment: str, endpoint: str, force_service_prefix: bool = False) -> str:
     """Return the correct gateway path based on the routing mode."""
     clean_endpoint = endpoint.lstrip('/')
-    if ROUTING_MODE in {"api", "api-prefix", "api_only"}:
+    if not force_service_prefix and ROUTING_MODE in {"api", "api-prefix", "api_only"}:
         return f"/{clean_endpoint}"
     clean_service = service_segment.strip('/\\')
     return f"/{clean_service}/{clean_endpoint}"
