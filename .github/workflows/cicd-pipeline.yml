@@ -531,16 +531,16 @@ jobs:
         uses: zaproxy/action-baseline@v0.14.0
         with:
           target: http://${{ steps.zap-gateway.outputs.api_gateway_ip }}:8080
-          cmd_options: "-a -d -I -r zap_report.html -w zap_report.md -x zap_report.xml -J zap_report.json -l zap_scan.log"
+          cmd_options: '-a -d -I'
           allow_issue_writing: false
 
       - name: Collect ZAP artifacts
         run: |
-          for file in zap_report.html zap_report.md zap_report.xml zap_report.json zap_scan.log;
-          do
+          FILES=(zap_report.html zap_report.md zap_report.xml zap_report.json zap_scan.log report_html.html report_md.md report_xml.xml report_json.json)
+          for file in "${FILES[@]}"; do
             if [ -f "$file" ]; then
               echo "Collecting $file"
-              mv "$file" reports/security/
+              mv "$file" "reports/security/${file}"
             fi
           done
           echo "ZAP artifacts available:"

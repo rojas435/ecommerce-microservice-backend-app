@@ -37,6 +37,8 @@ from datetime import datetime
 ROUTING_MODE = os.getenv("LOCUST_ROUTING_MODE", "service-prefix").strip().lower()
 PRODUCT_CACHE_LOCK = threading.Lock()
 PRODUCT_ID_CACHE: list[int] = []
+USER_CACHE_LOCK = threading.Lock()
+USER_ID_CACHE: list[int] = []
 
 
 def format_app_datetime() -> str:
@@ -95,6 +97,77 @@ def pick_existing_product_id(client) -> int:
         return cached
     return random.randint(1, 10)
 
+def update_user_cache(payload: dict) -> None:
+    collection = []
+    if isinstance(payload, dict):
+        if isinstance(payload.get("collection"), list):
+            collection = payload.get("collection")
+        elif isinstance(payload.get("users"), list):
+            collection = payload.get("users")
+    ids = []
+    for user in collection:
+        user_id = user.get("userId") if isinstance(user, dict) else None
+        if user_id is None:
+            continue
+        try:
+            ids.append(int(user_id))
+        except (TypeError, ValueError):
+            continue
+    if ids:
+        with USER_CACHE_LOCK:
+            global USER_ID_CACHE
+            USER_ID_CACHE = ids
+
+
+def ensure_user_cache(client) -> None:
+    with USER_CACHE_LOCK:
+        if USER_ID_CACHE:
+            return
+    with client.get(
+        build_path("user-service", "api/users"),
+        name="[Cache] Fetch Users",
+        catch_response=True,
+    ) as response:
+        if response.status_code == 200:
+            try:
+                update_user_cache(response.json())
+                response.success()
+            except json.JSONDecodeError:
+                response.failure("Invalid JSON while caching users")
+        else:
+            response.failure(f"Failed to cache users (status {response.status_code})")
+
+
+def pick_existing_user_id(client) -> int:
+    ensure_user_cache(client)
+    with USER_CACHE_LOCK:
+        if USER_ID_CACHE:
+            return random.choice(USER_ID_CACHE)
+    return 1
+
+
+def create_cart_for_user(client, user_id: int) -> int | None:
+    payload = {"userId": user_id}
+    with client.post(
+        build_path("order-service", "api/carts"),
+        json=payload,
+        name="[Write] Create Cart",
+        catch_response=True,
+    ) as response:
+        if response.status_code in [200, 201]:
+            try:
+                raw_id = response.json().get("cartId")
+                cart_id = int(raw_id) if raw_id is not None else None
+                response.success()
+                return cart_id
+            except json.JSONDecodeError:
+                response.failure("Invalid JSON creating cart")
+            except (TypeError, ValueError):
+                response.failure("Cart ID not numeric")
+        else:
+            response.failure(f"Failed to create cart (status {response.status_code})")
+    return None
+
 
 def build_path(service_segment: str, endpoint: str) -> str:
     """Return the correct gateway path based on the routing mode."""
@@ -118,7 +191,10 @@ class EcommerceUserBehavior(SequentialTaskSet):
     # Shared data between tasks
     product_id = None
     order_id = None
-    user_id = 1  # Using fixed user ID for simplicity in tests
+    user_id = None  # Resolved at runtime
+
+    def on_start(self):
+        self.user_id = pick_existing_user_id(self.client)
     
     @task
     def browse_products(self):
@@ -177,7 +253,7 @@ class EcommerceUserBehavior(SequentialTaskSet):
                     response.failure("Invalid JSON response")
             elif response.status_code == 404:
                 # Product not found is acceptable, try another
-                self.product_id = random.randint(1, 10)
+                self.product_id = pick_existing_product_id(self.client)
                 response.success()  # Don't count as failure
             else:
                 response.failure(f"Got status code {response.status_code}")
@@ -192,8 +268,9 @@ class EcommerceUserBehavior(SequentialTaskSet):
         if not self.product_id:
             self.product_id = pick_existing_product_id(self.client)
         
+        user_id = self.user_id or pick_existing_user_id(self.client)
         payload = {
-            "userId": self.user_id,
+            "userId": user_id,
             "productId": self.product_id,
             "likeDate": format_app_datetime()
         }
@@ -222,11 +299,15 @@ class EcommerceUserBehavior(SequentialTaskSet):
         if not self.product_id:
             self.product_id = pick_existing_product_id(self.client)
         
+        user_id = self.user_id or pick_existing_user_id(self.client)
+        cart_id = create_cart_for_user(self.client, user_id)
+        if not cart_id:
+            return
         payload = {
             "orderDate": format_app_datetime(),
             "orderDesc": f"Performance test order {random.randint(1000, 9999)}",
             "orderFee": round(random.uniform(10.0, 500.0), 2),
-            "userId": self.user_id
+            "cart": {"cartId": cart_id}
         }
         
         with self.client.post(
@@ -315,6 +396,10 @@ class WriteHeavyUser(HttpUser):
     wait_time = between(2, 5)  # Slower pace for write operations
     weight = 3
     last_order_id: int | None = None
+    user_id: int | None = None
+
+    def on_start(self):
+        self.user_id = pick_existing_user_id(self.client)
     
     @task(5)
     def create_order(self):
@@ -324,8 +409,9 @@ class WriteHeavyUser(HttpUser):
     @task(3)
     def add_favourite(self):
         """Add product to favourites"""
+        user_id = self.user_id or pick_existing_user_id(self.client)
         payload = {
-            "userId": random.randint(1, 10),
+            "userId": user_id,
             "productId": pick_existing_product_id(self.client),
             "likeDate": format_app_datetime()
         }
@@ -339,8 +425,8 @@ class WriteHeavyUser(HttpUser):
             return
         payload = {
             "isPayed": True,
-            "paymentDate": format_app_datetime(),
-            "orderId": order_id
+            "paymentStatus": "COMPLETED",
+            "order": {"orderId": order_id}
         }
         with self.client.post(
             build_path("payment-service", "api/payments"),
@@ -351,14 +437,18 @@ class WriteHeavyUser(HttpUser):
             if response.status_code in [200, 201]:
                 response.success()
             else:
-                response.failure(f"Got status code {response.status_code}")
+                response.failure(f"Got status code {response.status_code}: {response.text[:200]}")
 
     def _submit_order(self, metric_name: str) -> int | None:
+        user_id = self.user_id or pick_existing_user_id(self.client)
+        cart_id = create_cart_for_user(self.client, user_id)
+        if not cart_id:
+            return None
         payload = {
             "orderDate": format_app_datetime(),
             "orderDesc": f"Load test order {random.randint(1000, 9999)}",
             "orderFee": round(random.uniform(50.0, 500.0), 2),
-            "userId": random.randint(1, 10)
+            "cart": {"cartId": cart_id}
         }
         with self.client.post(
             build_path("order-service", "api/orders"),
@@ -375,7 +465,7 @@ class WriteHeavyUser(HttpUser):
                 except json.JSONDecodeError:
                     response.failure("Invalid JSON response")
             else:
-                response.failure(f"Got status code {response.status_code}")
+                response.failure(f"Got status code {response.status_code}: {response.text[:200]}")
         return None
 
 
