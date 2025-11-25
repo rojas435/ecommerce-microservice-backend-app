@@ -31,6 +31,7 @@ import random
 import json
 import threading
 from datetime import datetime
+from datetime import datetime, timedelta
 
 # Allow switching between legacy service-prefixed routes (/order-service/...) and
 # the api-only routes (/api/orders) used by the docker profile.
@@ -58,11 +59,24 @@ def extract_collection(payload, *alternate_keys, allow_single_dict: bool = False
         if allow_single_dict:
             return [payload]
     return []
+LIKE_DATE_LOCK = threading.Lock()
+LIKE_DATE_COUNTER = 0
 
 
-def format_app_datetime() -> str:
+def format_app_datetime(base_dt: datetime | None = None) -> str:
     """Match the dd-MM-yyyy__HH:mm:ss:SSSSSS format expected by the services."""
-    return datetime.now().strftime("%d-%m-%Y__%H:%M:%S:%f")
+    target = base_dt or datetime.now()
+    return target.strftime("%d-%m-%Y__%H:%M:%S:%f")
+
+
+def format_unique_like_datetime() -> str:
+    """Ensure likeDate stays unique even if the DB truncates fractional seconds."""
+    global LIKE_DATE_COUNTER
+    with LIKE_DATE_LOCK:
+        LIKE_DATE_COUNTER += 1
+        offset_seconds = LIKE_DATE_COUNTER
+    unique_dt = datetime.now() + timedelta(seconds=offset_seconds)
+    return format_app_datetime(unique_dt)
 
 
 def update_product_cache(products: list[dict] | dict) -> None:
@@ -312,7 +326,7 @@ class EcommerceUserBehavior(SequentialTaskSet):
         payload = {
             "userId": user_id,
             "productId": self.product_id,
-            "likeDate": format_app_datetime()
+            "likeDate": format_unique_like_datetime()
         }
         
         with self.client.post(
@@ -470,9 +484,18 @@ class WriteHeavyUser(HttpUser):
         payload = {
             "userId": user_id,
             "productId": pick_existing_product_id(self.client),
-            "likeDate": format_app_datetime()
+            "likeDate": format_unique_like_datetime()
         }
-        self.client.post(build_path("favourite-service", "api/favourites"), json=payload, name="[Write] Add Favourite")
+        with self.client.post(
+            build_path("favourite-service", "api/favourites"),
+            json=payload,
+            name="[Write] Add Favourite",
+            catch_response=True,
+        ) as response:
+            if response.status_code in [200, 201, 409]:
+                response.success()
+            else:
+                response.failure(f"Got status code {response.status_code}: {response.text[:200]}")
     
     @task(2)
     def create_payment(self):
