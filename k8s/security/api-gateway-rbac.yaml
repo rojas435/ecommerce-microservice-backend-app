@@ -1,0 +1,47 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: gateway-sa
+  namespace: ecommerce
+  labels:
+    app: api-gateway
+    security: rbac
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: gateway-config-reader
+  namespace: ecommerce
+  labels:
+    app: api-gateway
+    security: rbac
+rules:
+  - apiGroups: [""]
+    resources:
+      - configmaps
+    resourceNames:
+      - microservices-config
+      - api-gateway-routes
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources:
+      - services
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: gateway-config-reader-binding
+  namespace: ecommerce
+  labels:
+    app: api-gateway
+    security: rbac
+subjects:
+  - kind: ServiceAccount
+    name: gateway-sa
+    namespace: ecommerce
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: gateway-config-reader

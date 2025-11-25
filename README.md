@@ -112,6 +112,30 @@ El proyecto ahora cumple los siete puntos del rúbro de observabilidad:
 
 > Sugerencia: aplicá los manifiestos de observabilidad en un pipeline opcional (por ejemplo, `kubectl apply -k k8s/observability`) para no tocar el pipeline actual hasta que se necesite monitoreo.
 
+## Seguridad
+
+- **RBAC**: el API Gateway ahora corre con el ServiceAccount `gateway-sa`, limitado por el `Role` definido en `k8s/security/api-gateway-rbac.yaml`. Aplicá el manifiesto antes de desplegar el gateway:
+
+    ```bash
+    kubectl apply -f k8s/security/api-gateway-rbac.yaml
+    kubectl apply -f k8s/api-gateway.yaml
+    ```
+
+    El manifiesto `k8s/all-in-one.yaml` incluye las mismas definiciones para los entornos simplificados, evitando privilegios excesivos para los pods.
+
+- **TLS público**: `k8s/security/api-gateway-ingress.yaml` provee un Ingress con terminación TLS. Generá (o importa) un certificado y crea el secret `api-gateway-tls` en el namespace `ecommerce`:
+
+    ```bash
+    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+        -keyout api-gateway.key -out api-gateway.crt \
+        -subj "/CN=api.ecommerce.local/O=Ecommerce"
+    kubectl -n ecommerce create secret tls api-gateway-tls \
+        --cert=api-gateway.crt --key=api-gateway.key
+    kubectl apply -f k8s/security/api-gateway-ingress.yaml
+    ```
+
+    Para producción reemplaza `api.ecommerce.local` por tu dominio real y usa un certificado emitido por una CA válida (por ejemplo, Let’s Encrypt mediante `cert-manager`). El Service `api-gateway` puede seguir exponiéndose por NodePort para pruebas internas; el Ingress agrega la capa TLS para el tráfico público.
+
 
 ### System Boundary *Architecture* - μServices Landscape
 
