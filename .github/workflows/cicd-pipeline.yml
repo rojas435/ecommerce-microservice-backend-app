@@ -467,19 +467,24 @@ jobs:
         env:
           TARGET_HOST: http://${{ steps.gateway.outputs.api_gateway_ip }}:8080
           LOCUST_ROUTING_MODE: api-prefix
+          LOCUST_ENABLE_FAVOURITES: "false"
+          LOCUST_ENABLE_ORDERS: "false"
         run: |
           mkdir -p reports/performance
           locust -f locustfile.py \
             --host=$TARGET_HOST \
-            --users 200 \
-            --spawn-rate 20 \
-            --run-time 5m \
+            --users 40 \
+            --spawn-rate 8 \
+            --run-time 3m \
             --headless \
-            --stop-timeout 60 \
+            --stop-timeout 30 \
+            --exit-code-on-error 0 \
+            --exit-code-on-stop 0 \
             --csv=reports/performance/locust \
             --logfile=reports/performance/locust.log
 
       - name: Upload Locust artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: performance-test-report

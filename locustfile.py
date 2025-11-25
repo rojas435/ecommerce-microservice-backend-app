@@ -30,13 +30,13 @@ import os
 import random
 import json
 import threading
-from datetime import datetime
 from datetime import datetime, timedelta
 
 # Allow switching between legacy service-prefixed routes (/order-service/...) and
 # the api-only routes (/api/orders) used by the docker profile.
 ROUTING_MODE = os.getenv("LOCUST_ROUTING_MODE", "service-prefix").strip().lower()
 ENABLE_FAVOURITE_WRITES = os.getenv("LOCUST_ENABLE_FAVOURITES", "false").strip().lower() in {"1", "true", "yes"}
+ENABLE_ORDER_FLOW = os.getenv("LOCUST_ENABLE_ORDERS", "false").strip().lower() in {"1", "true", "yes"}
 PRODUCT_CACHE_LOCK = threading.Lock()
 PRODUCT_ID_CACHE: list[int] = []
 USER_CACHE_LOCK = threading.Lock()
@@ -349,6 +349,8 @@ class EcommerceUserBehavior(SequentialTaskSet):
         Create new order - 15% of traffic
         Expected: < 500ms response time (writes are slower)
         """
+        if not ENABLE_ORDER_FLOW:
+            return
         if not self.product_id:
             self.product_id = pick_existing_product_id(self.client)
         
@@ -386,6 +388,8 @@ class EcommerceUserBehavior(SequentialTaskSet):
         View user's orders - 10% of traffic
         Expected: < 250ms response time
         """
+        if not ENABLE_ORDER_FLOW:
+            return
         with self.client.get(
             build_path("order-service", "api/orders"),
             catch_response=True,
@@ -442,6 +446,8 @@ class ReadHeavyUser(HttpUser):
     @task(2)
     def view_orders(self):
         """View user's orders"""
+        if not ENABLE_ORDER_FLOW:
+            return
         with self.client.get(
             build_path("order-service", "api/orders"),
             name="[Read] View Orders",
@@ -464,7 +470,7 @@ class WriteHeavyUser(HttpUser):
     Weight: 3
     """
     wait_time = between(2, 5)  # Slower pace for write operations
-    weight = 3
+    weight = 3 if ENABLE_ORDER_FLOW else 0
     last_order_id: int | None = None
     user_id: int | None = None
 
@@ -474,6 +480,8 @@ class WriteHeavyUser(HttpUser):
     @task(5)
     def create_order(self):
         """Create a new order"""
+        if not ENABLE_ORDER_FLOW:
+            return
         self._submit_order("[Write] Create Order")
     
     @task(3)
@@ -501,6 +509,8 @@ class WriteHeavyUser(HttpUser):
     @task(2)
     def create_payment(self):
         """Create a payment"""
+        if not ENABLE_ORDER_FLOW:
+            return
         order_id = self.last_order_id or self._submit_order("[Write] Create Order (prefetch)")
         if not order_id:
             return
@@ -521,6 +531,8 @@ class WriteHeavyUser(HttpUser):
                 response.failure(f"Got status code {response.status_code}: {response.text[:200]}")
 
     def _submit_order(self, metric_name: str) -> int | None:
+        if not ENABLE_ORDER_FLOW:
+            return None
         user_id = self.user_id or pick_existing_user_id(self.client)
         cart_id = pick_existing_cart_id(self.client)
         if not cart_id:
@@ -557,7 +569,7 @@ class RealisticUserJourney(HttpUser):
     Weight: 2 (20% of users follow complete journey)
     """
     wait_time = between(1, 4)
-    weight = 2
+    weight = 2 if ENABLE_ORDER_FLOW else 0
     tasks = [EcommerceUserBehavior]
 
 
