@@ -1,0 +1,130 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-config
+  namespace: observability
+  labels:
+    app: grafana
+    grafana-dashboard: "true"
+data:
+  datasource.yaml: |
+    apiVersion: 1
+    deleteDatasources:
+      - name: Prometheus
+        orgId: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        orgId: 1
+        url: http://prometheus.observability:9090
+        isDefault: true
+        jsonData:
+          httpMethod: GET
+  dashboards.yaml: |
+    apiVersion: 1
+    providers:
+      - name: microservices
+        orgId: 1
+        folder: Microservices
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /var/lib/grafana/dashboards/microservices
+  services-dashboard.json: |
+    {
+      "id": null,
+      "title": "Estado Técnicо Microservicios",
+      "timezone": "browser",
+      "schemaVersion": 30,
+      "version": 1,
+      "panels": [
+        {
+          "type": "stat",
+          "title": "Disponibilidad",
+          "datasource": "Prometheus",
+          "targets": [
+            {
+              "expr": "avg(kube_pod_container_status_ready{namespace=\"ecommerce\"})"
+            }
+          ]
+        },
+        {
+          "type": "timeseries",
+          "title": "Latencia HTTP",
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s"
+            }
+          },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{job=\"ecommerce-service\"}[5m])) by (le, app))",
+              "legendFormat": "{{app}}"
+            }
+          ]
+        },
+        {
+          "type": "timeseries",
+          "title": "Errores 5xx",
+          "datasource": "Prometheus",
+          "targets": [
+            {
+              "expr": "sum(rate(http_server_requests_seconds_count{status=~\"5..\"}[5m])) by (app)",
+              "legendFormat": "{{app}}"
+            }
+          ]
+        }
+      ]
+    }
+  business-dashboard.json: |
+    {
+      "id": null,
+      "title": "KPIs de Negocio",
+      "timezone": "browser",
+      "schemaVersion": 30,
+      "version": 1,
+      "panels": [
+        {
+          "type": "timeseries",
+          "title": "Órdenes creadas",
+          "datasource": "Prometheus",
+          "targets": [
+            {
+              "expr": "rate(order_service_orders_created_total[5m])",
+              "legendFormat": "Órdenes/min"
+            }
+          ]
+        },
+        {
+          "type": "timeseries",
+          "title": "Ingresos procesados",
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "unit": "currencyUSD"
+            }
+          },
+          "targets": [
+            {
+              "expr": "rate(payment_service_payments_amount_total[5m])",
+              "legendFormat": "USD/min"
+            }
+          ]
+        },
+        {
+          "type": "timeseries",
+          "title": "Pagos fallidos",
+          "datasource": "Prometheus",
+          "targets": [
+            {
+              "expr": "rate(payment_service_payments_failed_total[5m])",
+              "legendFormat": "Fallos/min"
+            }
+          ]
+        }
+      ]
+    }

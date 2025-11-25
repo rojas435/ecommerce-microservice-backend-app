@@ -78,6 +78,40 @@ Notes:
 - The Docker Compose file is configured with the `docker` Spring profile so services discover each other via the internal Docker network.
 - If ports are busy on your machine, adjust the port mappings in `compose.yml` accordingly.
 
+## Observabilidad y Monitoreo
+
+El proyecto ahora cumple los siete puntos del rúbro de observabilidad:
+
+- **Prometheus + Grafana**: Los manifiestos dentro de `k8s/observability` despliegan Prometheus (con reglas de alerta listas), Grafana (con dashboards técnicos y de negocio) y Alertmanager. Despliegue rápido:
+
+    ```bash
+    kubectl apply -f k8s/observability/namespace.yaml
+    kubectl apply -f k8s/observability/prometheus-configmap.yaml
+    kubectl apply -f k8s/observability/prometheus-deployment.yaml
+    kubectl apply -f k8s/observability/grafana-configmap.yaml
+    kubectl apply -f k8s/observability/grafana-deployment.yaml
+    kubectl apply -f k8s/observability/alertmanager-config.yaml
+    kubectl apply -f k8s/observability/zipkin.yaml
+    ```
+
+    Exponé Grafana con `kubectl -n observability port-forward svc/grafana 3000:3000` (usuario `admin`, contraseña `admin1234`).
+
+- **ELK Stack**: `k8s/logging` contiene Elasticsearch (statefulset con PVC), Logstash y Filebeat (DaemonSet) además de Kibana. Se limita la recolección a los pods del namespace `ecommerce`.
+
+- **Alertas críticas**: `prometheus-configmap.yaml` define alertas para pods caídos, errores 5xx, ausencia de órdenes y tasa de fallos en pagos. Alertmanager reenvía a un webhook o SMTP configurable.
+
+- **Tracing distribuido**: Zipkin vive en `observability` y se integra mediante las variables `SPRING_ZIPKIN_*` reactivadas en `k8s/configmap.yaml`. En Kubernetes los servicios envían spans a `http://zipkin-server.observability:9411`.
+
+- **Health checks**: Todos los manifiestos de `k8s/*.yaml` incluyen probes de readiness/liveness (y el `all-in-one.yaml` ahora replica la misma configuración) apuntando a `/actuator/health`.
+
+- **Métricas de negocio**: `order-service` emite `order_service_orders_created_total` y `order_service_order_fee_total`; `payment-service` expone `payment_service_payments_total`, `payment_service_payments_failed_total` y `payment_service_payments_amount_total`. Estos KPIs alimentan los dashboards y alertas.
+
+- **Dashboards**: `k8s/observability/grafana-configmap.yaml` provisiona dos dashboards (estado técnico y KPIs) listos para importar o extender.
+
+- **Centralización de logs**: `k8s/logging` despliega Filebeat → Logstash → Elasticsearch → Kibana. Exponé Kibana con `kubectl -n observability port-forward svc/kibana 5601:5601`.
+
+> Sugerencia: aplicá los manifiestos de observabilidad en un pipeline opcional (por ejemplo, `kubectl apply -k k8s/observability`) para no tocar el pipeline actual hasta que se necesite monitoreo.
+
 
 ### System Boundary *Architecture* - μServices Landscape
 

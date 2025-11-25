@@ -1,0 +1,98 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logstash-pipeline
+  namespace: observability
+data:
+  logstash.conf: |
+    input {
+      beats {
+        port => 5044
+      }
+    }
+
+    filter {
+      json {
+        source => "message"
+        target => "json"
+        skip_on_invalid_json => true
+      }
+      mutate {
+        add_field => { "service" => "%{[kubernetes][labels][app]}" }
+      }
+    }
+
+    output {
+      elasticsearch {
+        hosts => ["http://elasticsearch.observability:9200"]
+        index => "ecommerce-logs-%{+YYYY.MM.dd}"
+      }
+      stdout { codec => rubydebug }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: logstash
+  namespace: observability
+  labels:
+    app: logstash
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: logstash
+  template:
+    metadata:
+      labels:
+        app: logstash
+    spec:
+      containers:
+        - name: logstash
+          image: docker.elastic.co/logstash/logstash:7.17.20
+          ports:
+            - containerPort: 5044
+              name: beats
+          volumeMounts:
+            - name: pipeline
+              mountPath: /usr/share/logstash/pipeline
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 9600
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 9600
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
+      volumes:
+        - name: pipeline
+          configMap:
+            name: logstash-pipeline
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: logstash
+  namespace: observability
+  labels:
+    app: logstash
+spec:
+  selector:
+    app: logstash
+  ports:
+    - name: beats
+      port: 5044
+      targetPort: 5044
+  type: ClusterIP

@@ -13,6 +13,7 @@ import com.selimhorri.app.dto.OrderDto;
 import com.selimhorri.app.dto.PaymentDto;
 import com.selimhorri.app.exception.wrapper.PaymentNotFoundException;
 import com.selimhorri.app.helper.PaymentMappingHelper;
+import com.selimhorri.app.metrics.PaymentMetricsRecorder;
 import com.selimhorri.app.repository.PaymentRepository;
 import com.selimhorri.app.service.PaymentService;
 
@@ -27,6 +28,7 @@ public class PaymentServiceImpl implements PaymentService {
 	
 	private final PaymentRepository paymentRepository;
 	private final RestTemplate restTemplate;
+	private final PaymentMetricsRecorder paymentMetricsRecorder;
 	
 	@Override
 	public List<PaymentDto> findAll() {
@@ -59,21 +61,26 @@ public class PaymentServiceImpl implements PaymentService {
 	@Override
 	public PaymentDto save(final PaymentDto paymentDto) {
 		log.info("*** PaymentDto, service; save payment *");
-		return PaymentMappingHelper.map(this.paymentRepository
+		final PaymentDto saved = PaymentMappingHelper.map(this.paymentRepository
 				.save(PaymentMappingHelper.map(paymentDto)));
+		this.paymentMetricsRecorder.recordPayment(paymentDto, saved);
+		return saved;
 	}
 	
 	@Override
 	public PaymentDto update(final PaymentDto paymentDto) {
 		log.info("*** PaymentDto, service; update payment *");
-		return PaymentMappingHelper.map(this.paymentRepository
+		final PaymentDto updated = PaymentMappingHelper.map(this.paymentRepository
 				.save(PaymentMappingHelper.map(paymentDto)));
+		this.paymentMetricsRecorder.recordPayment(paymentDto, updated);
+		return updated;
 	}
 	
 	@Override
 	public void deleteById(final Integer paymentId) {
 		log.info("*** Void, service; delete payment by id *");
 		this.paymentRepository.deleteById(paymentId);
+		this.paymentMetricsRecorder.recordPaymentDeletion();
 	}
 	
 	

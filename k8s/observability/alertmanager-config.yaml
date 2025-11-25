@@ -1,0 +1,87 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-config
+  namespace: observability
+data:
+  alertmanager.yml: |
+    global:
+      resolve_timeout: 5m
+
+    route:
+      receiver: default-receiver
+      routes:
+        - match:
+            severity: critical
+          receiver: paging
+
+    receivers:
+      - name: default-receiver
+        webhook_configs:
+          - url: http://notification-hook.default.svc.cluster.local:8080/alerts
+            send_resolved: true
+      - name: paging
+        email_configs:
+          - to: devops@example.com
+            from: alerts@example.com
+            smarthost: smtp.example.com:587
+            auth_username: alerts@example.com
+            auth_identity: alerts@example.com
+            auth_password: changeMe
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alertmanager
+  namespace: observability
+  labels:
+    app: alertmanager
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: alertmanager
+  template:
+    metadata:
+      labels:
+        app: alertmanager
+    spec:
+      containers:
+        - name: alertmanager
+          image: prom/alertmanager:v0.27.0
+          args:
+            - "--config.file=/etc/alertmanager/alertmanager.yml"
+          ports:
+            - containerPort: 9093
+              name: http
+          volumeMounts:
+            - name: alertmanager-config
+              mountPath: /etc/alertmanager
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 300m
+              memory: 256Mi
+      volumes:
+        - name: alertmanager-config
+          configMap:
+            name: alertmanager-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alertmanager
+  namespace: observability
+  labels:
+    app: alertmanager
+spec:
+  selector:
+    app: alertmanager
+  ports:
+    - name: http
+      port: 9093
+      targetPort: 9093
+  type: ClusterIP

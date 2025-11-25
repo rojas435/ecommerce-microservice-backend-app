@@ -19,7 +19,8 @@ data:
   SPRING_CONFIG_IMPORT: ""
   EUREKA_CLIENT_ENABLED: "false"
   SPRING_CLOUD_CONFIG_ENABLED: "false"
-  SPRING_ZIPKIN_ENABLED: "false"
+  SPRING_ZIPKIN_ENABLED: "true"
+  SPRING_ZIPKIN_BASE_URL: "http://zipkin-server.observability:9411"
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -73,6 +74,18 @@ spec:
         envFrom:
         - configMapRef:
             name: microservices-config
+        readinessProbe:
+          httpGet:
+            path: /order-service/actuator/health
+            port: 8300
+          initialDelaySeconds: 45
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /order-service/actuator/health
+            port: 8300
+          initialDelaySeconds: 60
+          periodSeconds: 10
 ---
 apiVersion: v1
 kind: Service
@@ -114,6 +127,18 @@ spec:
         envFrom:
         - configMapRef:
             name: microservices-config
+        readinessProbe:
+          httpGet:
+            path: /product-service/actuator/health
+            port: 8500
+          initialDelaySeconds: 45
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /product-service/actuator/health
+            port: 8500
+          initialDelaySeconds: 60
+          periodSeconds: 10
 ---
 apiVersion: v1
 kind: Service
@@ -156,6 +181,18 @@ spec:
         envFrom:
         - configMapRef:
             name: microservices-config
+        readinessProbe:
+          httpGet:
+            path: /user-service/actuator/health
+            port: 8700
+          initialDelaySeconds: 45
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /user-service/actuator/health
+            port: 8700
+          initialDelaySeconds: 60
+          periodSeconds: 10
 ---
 apiVersion: v1
 kind: Service
@@ -200,6 +237,18 @@ spec:
         envFrom:
         - configMapRef:
             name: microservices-config
+        readinessProbe:
+          httpGet:
+            path: /favourite-service/actuator/health
+            port: 8800
+          initialDelaySeconds: 45
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /favourite-service/actuator/health
+            port: 8800
+          initialDelaySeconds: 60
+          periodSeconds: 10
 ---
 apiVersion: v1
 kind: Service
@@ -244,6 +293,18 @@ spec:
         envFrom:
         - configMapRef:
             name: microservices-config
+        readinessProbe:
+          httpGet:
+            path: /shipping-service/actuator/health
+            port: 8600
+          initialDelaySeconds: 45
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /shipping-service/actuator/health
+            port: 8600
+          initialDelaySeconds: 60
+          periodSeconds: 10
 ---
 apiVersion: v1
 kind: Service
@@ -288,6 +349,18 @@ spec:
         envFrom:
         - configMapRef:
             name: microservices-config
+        readinessProbe:
+          httpGet:
+            path: /payment-service/actuator/health
+            port: 8400
+          initialDelaySeconds: 45
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /payment-service/actuator/health
+            port: 8400
+          initialDelaySeconds: 60
+          periodSeconds: 10
 ---
 apiVersion: v1
 kind: Service
@@ -332,6 +405,18 @@ spec:
             name: microservices-config
         - configMapRef:
             name: api-gateway-routes
+        readinessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          initialDelaySeconds: 45
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 10
 ---
 apiVersion: v1
 kind: Service
