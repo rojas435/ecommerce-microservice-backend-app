@@ -36,6 +36,7 @@ from datetime import datetime, timedelta
 # Allow switching between legacy service-prefixed routes (/order-service/...) and
 # the api-only routes (/api/orders) used by the docker profile.
 ROUTING_MODE = os.getenv("LOCUST_ROUTING_MODE", "service-prefix").strip().lower()
+ENABLE_FAVOURITE_WRITES = os.getenv("LOCUST_ENABLE_FAVOURITES", "false").strip().lower() in {"1", "true", "yes"}
 PRODUCT_CACHE_LOCK = threading.Lock()
 PRODUCT_ID_CACHE: list[int] = []
 USER_CACHE_LOCK = threading.Lock()
@@ -319,6 +320,8 @@ class EcommerceUserBehavior(SequentialTaskSet):
         Add product to favourites - 10% of traffic
         Expected: < 300ms response time
         """
+        if not ENABLE_FAVOURITE_WRITES:
+            return
         if not self.product_id:
             self.product_id = pick_existing_product_id(self.client)
         
@@ -328,17 +331,13 @@ class EcommerceUserBehavior(SequentialTaskSet):
             "productId": self.product_id,
             "likeDate": format_unique_like_datetime()
         }
-        
         with self.client.post(
             build_path("favourite-service", "api/favourites"),
             json=payload,
             catch_response=True,
             name="Add to Favourites"
         ) as response:
-            if response.status_code in [200, 201]:
-                response.success()
-            elif response.status_code == 409:
-                # Conflict (already exists) is acceptable
+            if response.status_code in [200, 201, 409]:
                 response.success()
             else:
                 response.failure(f"Got status code {response.status_code}")
@@ -480,6 +479,8 @@ class WriteHeavyUser(HttpUser):
     @task(3)
     def add_favourite(self):
         """Add product to favourites"""
+        if not ENABLE_FAVOURITE_WRITES:
+            return
         user_id = self.user_id or pick_existing_user_id(self.client)
         payload = {
             "userId": user_id,
