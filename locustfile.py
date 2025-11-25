@@ -43,15 +43,32 @@ CART_CACHE_LOCK = threading.Lock()
 CART_ID_CACHE: list[int] = []
 
 
+def extract_collection(payload, *alternate_keys, allow_single_dict: bool = False) -> list:
+    """Return a list of items from DtoCollectionResponse-like payloads."""
+    if isinstance(payload, list):
+        return payload
+    if isinstance(payload, dict):
+        collection = payload.get("collection")
+        if isinstance(collection, list):
+            return collection
+        for key in alternate_keys:
+            candidate = payload.get(key)
+            if isinstance(candidate, list):
+                return candidate
+        if allow_single_dict:
+            return [payload]
+    return []
+
+
 def format_app_datetime() -> str:
     """Match the dd-MM-yyyy__HH:mm:ss:SSSSSS format expected by the services."""
     return datetime.now().strftime("%d-%m-%Y__%H:%M:%S:%f")
 
 
-def update_product_cache(products: list[dict]) -> None:
+def update_product_cache(products: list[dict] | dict) -> None:
     """Store any product ids returned by the API for later reuse."""
     ids = []
-    for product in products or []:
+    for product in extract_collection(products):
         product_id = product.get("productId")
         if product_id is None:
             continue
@@ -101,14 +118,7 @@ def pick_existing_product_id(client) -> int:
 
 
 def update_cart_cache(payload: dict) -> None:
-    orders = []
-    if isinstance(payload, dict):
-        if isinstance(payload.get("collection"), list):
-            orders = payload["collection"]
-        else:
-            orders = [payload]
-    elif isinstance(payload, list):
-        orders = payload
+    orders = extract_collection(payload, allow_single_dict=True)
     ids = []
     for order in orders:
         if not isinstance(order, dict):
@@ -154,12 +164,7 @@ def pick_existing_cart_id(client) -> int | None:
     return None
 
 def update_user_cache(payload: dict) -> None:
-    collection = []
-    if isinstance(payload, dict):
-        if isinstance(payload.get("collection"), list):
-            collection = payload.get("collection")
-        elif isinstance(payload.get("users"), list):
-            collection = payload.get("users")
+    collection = extract_collection(payload, "users")
     ids = []
     for user in collection:
         user_id = user.get("userId") if isinstance(user, dict) else None
@@ -244,11 +249,12 @@ class EcommerceUserBehavior(SequentialTaskSet):
         ) as response:
             if response.status_code == 200:
                 try:
-                    products = response.json()
-                    if products and len(products) > 0:
-                        update_product_cache(products)
-                        # Store random product ID for next tasks
-                        raw_id = products[random.randint(0, min(len(products)-1, 10))].get('productId', 1)
+                    payload = response.json()
+                    products = extract_collection(payload)
+                    if products:
+                        update_product_cache(payload)
+                        candidates = products[: min(len(products), 10)]
+                        raw_id = random.choice(candidates).get('productId', 1)
                         try:
                             self.product_id = int(raw_id)
                         except (TypeError, ValueError):
@@ -402,9 +408,13 @@ class ReadHeavyUser(HttpUser):
         ) as response:
             if response.status_code == 200:
                 try:
-                    products = response.json()
-                    update_product_cache(products)
-                    response.success()
+                    payload = response.json()
+                    products = extract_collection(payload)
+                    if not products:
+                        response.failure("No products returned")
+                    else:
+                        update_product_cache(payload)
+                        response.success()
                 except json.JSONDecodeError:
                     response.failure("Invalid JSON response")
             else:
