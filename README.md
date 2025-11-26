@@ -1,3 +1,72 @@
+# Informe final – Ecommerce Microservices (fork)
+
+**Autores:** Juan Felipe Jojoa Crespo & Felipe Rojas Prado
+
+- 🎥 **Presentación en video:** [YouTube – Presentación Juan Felipe Jojoa y Felipe Rojas](https://youtu.be/ioxino6q5X8)
+- 📑 **Presentación ejecutiva:** [Canva – Informe Final](https://www.canva.com/design/DAG5tCyY6s4/VEK28H27qFYEDaAt3_JFdw/edit?utm_content=DAG5tCyY6s4&utm_campaign=designshare&utm_medium=link2&utm_source=sharebutton)
+- 📄 **Informe escrito:** [`doc/ReporteFinal.pdf`](doc/ReporteFinal.pdf)
+
+## Navegación rápida
+
+- [Resumen del entregable](#resumen-del-entregable)
+- [Recursos documentados](#recursos-documentados)
+- [Observabilidad & Logging (`k8s/observability`, `k8s/logging`)](#recursos-documentados)
+- [Seguridad (`k8s/security`)](#recursos-documentados)
+- [CI/CD Avanzado (GitHub Actions)](#ci/cd-con-github-actions)
+- [Subdocumentación y anexos](#subdocumentación-y-referencias)
+- [Presentación en video](https://youtu.be/ioxino6q5X8)
+- [Presentación Canva](https://www.canva.com/design/DAG5tCyY6s4/VEK28H27qFYEDaAt3_JFdw/edit?utm_content=DAG5tCyY6s4&utm_campaign=designshare&utm_medium=link2&utm_source=sharebutton)
+- [Informe PDF](doc/ReporteFinal.pdf)
+
+## Resumen del entregable
+
+- Modernizamos el fork para ejecutar los seis microservicios principales y el API Gateway dentro de Kubernetes, con manifiestos listos para AKS/local y contenedores publicados en ACR.
+- Habilitamos observabilidad completa (Prometheus, Grafana, Alertmanager, Zipkin, ELK, métricas de negocio y alertas) más un Ingress TLS dedicado para acceder a los tableros.
+- Aseguramos el plano de control con RBAC específico para el gateway y TLS de extremo a extremo (secrets `api-gateway-tls` y `observability-tls`).
+- Construimos un pipeline avanzado en **GitHub Actions** que ejecuta build, pruebas, análisis estático, escaneo de vulnerabilidades, empaqueta imágenes, despliega en AKS y corre smoke/performance/ZAP tests con artefactos de evidencia.
+
+## Recursos documentados
+
+### Arquitectura Kubernetes
+- `k8s-6-services.yaml`: despliegue compacto de API Gateway + order/payment/shipping/product/user services con perfiles `docker` y límites de recursos.
+- `k8s/` (subcarpetas por microservicio) mantienen los manifiestos granulares para entornos completos; el README original del fork se conserva más abajo.
+
+### Observabilidad & Logging
+- `k8s/observability/` + `k8s/logging/`: manifiestos de Prometheus, Grafana, Alertmanager, Zipkin, Elasticsearch, Logstash, Filebeat y Kibana listos para aplicar (`kubectl apply -R`).
+- `k8s/security/observability-ingress.yaml`: Ingress TLS único (`observability.ecommerce.local`) que enruta `/grafana`, `/kibana`, `/alertmanager` y `/zipkin` (se requiere secret `observability-tls`).
+- Métricas de negocio instrumentadas en `order-service` y `payment-service` alimentan los dashboards provisionados en `k8s/observability/grafana-configmap.yaml`.
+
+### Seguridad
+- `k8s/security/api-gateway-rbac.yaml`: ServiceAccount + Role + RoleBinding que limitan al gateway a leer solo los ConfigMaps y Services necesarios.
+- `k8s/security/api-gateway-ingress.yaml`: Ingress HTTPS para el gateway usando el secret `api-gateway-tls`; documentado en la sección de Seguridad del README.
+
+### CI/CD con GitHub Actions
+- Workflow principal: `.github/workflows/cicd-pipeline.yml`.
+    - **Build & Test:** compila con JDK 17, genera JaCoCo y publica resultados.
+    - **Semantic Version:** calcula tags tipo `vX.Y.Z` (fallback por fecha) y libera notas en `master`.
+    - **Security Scan:** Trivy (filesystem) + OWASP Dependency Check con subida de SARIF/artifacts.
+    - **Build Docker Images:** matriz por servicio, múltiples tags (`version`, `sha`, `latest`, `semver`) y escaneo Trivy por imagen.
+    - **Deploy to AKS:** aplica `k8s-6-services`, espera rollouts, listar pods/svc y smoke test vía `/actuator/health`.
+    - **Performance Test:** ejecuta Locust headless contra el API Gateway expuesto.
+    - **ZAP Scan:** realiza OWASP ZAP Baseline posterior al despliegue.
+    - **Deploy to Prod (manual):** requiere `workflow_dispatch` y approvals de environment.
+    - **Notify:** imprime estatus consolidado, envía Slack (si hay secret) y crea issue cuando falla.
+
+## Subdocumentación y referencias
+
+| Tema | Ruta / Enlace | Descripción |
+| --- | --- | --- |
+| Observabilidad (cómo desplegar cada componente) | `k8s/observability/README.md` | Pasos para namespace, Prometheus, Grafana, Alertmanager y Zipkin. |
+| Logging centralizado | `k8s/logging/README.md` | Flujo Filebeat → Logstash → Elasticsearch → Kibana orientado al namespace `ecommerce`. |
+| Seguridad | `k8s/security/README.md` | Instrucciones para crear TLS y aplicar RBAC/Ingress del API Gateway. |
+| CI/CD avanzado | `.github/workflows/cicd-pipeline.yml` | Pipeline completo descrito arriba; usar como referencia para despliegues automatizados. |
+| Kubernetes manifiestos individuales | `k8s/*.yaml` | ConfigMaps, Services y Deployments granulares heredados del repo original y extendidos en este fork. |
+| Informe escrito | `doc/ReporteFinal.pdf` | Documento final entregado con contexto, métricas y hallazgos. |
+| Video de presentación | [YouTube](https://youtu.be/ioxino6q5X8) | Demostración ejecutiva del resultado final. |
+| Presentación ejecutiva | [Canva](https://www.canva.com/design/DAG5tCyY6s4/VEK28H27qFYEDaAt3_JFdw/edit?utm_content=DAG5tCyY6s4&utm_campaign=designshare&utm_medium=link2&utm_source=sharebutton) | Slides entregables con arquitectura, métricas y lecciones aprendidas. |
+
+---
+
 # e-Commerce-boot μServices 
 
 ## Important Note: This project's new milestone is to move The whole system to work on Kubernetes, so stay tuned.
